@@ -514,6 +514,37 @@
 }
 
 /* ========================================
+   分页
+   ======================================== */
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  padding: 16px 0;
+}
+
+.pagination :global(.ant-pagination-item),
+.pagination :global(.ant-pagination-prev),
+.pagination :global(.ant-pagination-next) {
+  background: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.pagination :global(.ant-pagination-item a),
+.pagination :global(.ant-pagination-item-link) {
+  color: var(--text-secondary);
+}
+
+.pagination :global(.ant-pagination-item-active) {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.pagination :global(.ant-pagination-item-active a) {
+  color: #fff;
+}
+
+/* ========================================
    响应式
    ======================================== */
 @media (max-width: 768px) {

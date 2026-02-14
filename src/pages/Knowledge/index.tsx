@@ -482,16 +482,7 @@ export function Knowledge() {
             </div>
             
             <div className={styles.detailContent}>
-              <pre style={{ 
-                whiteSpace: 'pre-wrap', 
-                fontFamily: 'inherit',
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                margin: 0,
-                color: '#ddd',
-                lineHeight: 1.8,
-              }}>
+              <pre className={styles.detailPre}>
                 {detailEntry.content}
               </pre>
             </div>
@@ -499,8 +490,8 @@ export function Knowledge() {
             {/* 所属项目标签 */}
             {(detailEntry.projectName || detailEntry.projectPath) && (
               <div className={styles.linkedProject}>
-                <FolderOutlined style={{ marginRight: 8, color: '#1677ff', fontSize: 15 }} />
-                <span style={{ color: '#888', fontSize: 12, marginRight: 8 }}>来自项目</span>
+                <FolderOutlined style={{ marginRight: 8, fontSize: 15 }} />
+                <Text type="secondary" style={{ fontSize: 12, marginRight: 8 }}>来自项目</Text>
                 <Tag color="blue" style={{ fontSize: 14, padding: '4px 16px', fontWeight: 600, borderRadius: 6 }}>
                   {detailEntry.projectName || detailEntry.projectPath?.split('/').pop() || '未知项目'}
                 </Tag>

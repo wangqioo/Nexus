@@ -312,6 +312,19 @@
   transition: color 0.3s;
 }
 
+/* 知识库详情内容 - 原始文本展示 */
+.detailPre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.8;
+  transition: color 0.3s;
+}
+
 .detailContent pre {
   background: var(--code-bg);
   border: 1px solid var(--border-primary);

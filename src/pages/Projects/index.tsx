@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Typography, Input, Button, Card, Tag, Empty, Space,
   message, Row, Col, Tooltip, Spin, Modal, Form,
-  Select, Popconfirm, Tabs, List, Drawer, Dropdown, Badge, Segmented
+  Select, Popconfirm, Tabs, List, Drawer, Dropdown, Badge, Segmented, Pagination
 } from 'antd'
 import {
   SearchOutlined, FolderOutlined, FolderAddOutlined, SyncOutlined,
@@ -53,6 +53,10 @@ export function Projects() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedType, setSelectedType] = useState<ProjectType | 'all'>('all')
   const [loading, setLoading] = useState(true)
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12) // 每页显示 12 个项目
   const [selectedProject, setSelectedProject] = useState<LocalProject | null>(null)
   const [projectData, setProjectData] = useState<SilProjectData | null>(null)
   const [linkedDocs, setLinkedDocs] = useState<{ knowledge: KnowledgeEntry[], notes: Note[] }>({ knowledge: [], notes: [] })
@@ -173,9 +177,12 @@ export function Projects() {
     }
   }
 
-  // 后台异步检查项目状态（逐个更新，不阻塞）
-  const checkProjectsStatusAsync = async (projectList: LocalProject[]) => {
-    for (const project of projectList) {
+  // 后台异步检查项目状态（只检查当前页，减少不必要的 API 调用）
+  const checkProjectsStatusAsync = async (projectList: LocalProject[], checkAll = false) => {
+    // 如果不是检查全部，只检查前 pageSize 个项目（首页）
+    const projectsToCheck = checkAll ? projectList : projectList.slice(0, pageSize)
+    
+    for (const project of projectsToCheck) {
       try {
         const silExists = await window.electronAPI.projectPathExists(
           `${project.path}/.nexus/project.yaml`
@@ -209,6 +216,19 @@ export function Projects() {
       }
     }
   }
+  
+  // 当翻页时，检查新页面的项目状态
+  useEffect(() => {
+    if (!loading && filteredProjects.length > 0) {
+      const startIndex = (currentPage - 1) * pageSize
+      const currentPageProjects = filteredProjects.slice(startIndex, startIndex + pageSize)
+      // 检查当前页中还没有状态的项目
+      const projectsNeedCheck = currentPageProjects.filter(p => p.lastActivity === undefined)
+      if (projectsNeedCheck.length > 0) {
+        checkProjectsStatusAsync(projectsNeedCheck, true)
+      }
+    }
+  }, [currentPage, pageSize, filteredProjects.length])
 
   // 同步版本（用于刷新按钮等需要等待的场景）
   const checkProjectsStatus = async (projectList: LocalProject[]) => {
@@ -264,7 +284,15 @@ export function Projects() {
     }
     
     setFilteredProjects(filtered)
+    // 筛选条件变化时重置到第一页
+    setCurrentPage(1)
   }
+  
+  // 当前页显示的项目（分页）
+  const paginatedProjects = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredProjects.slice(startIndex, startIndex + pageSize)
+  }, [filteredProjects, currentPage, pageSize])
   
   // 获取各类型项目数量
   const getTypeCount = (type: ProjectType | 'all') => {
@@ -1162,11 +1190,12 @@ export function Projects() {
 
       {/* ====== 项目卡片网格（与知识库统一） ====== */}
       {filteredProjects.length > 0 ? (
-        <div className={styles.cardGrid}>
-          {filteredProjects.map(project => {
-            const typeConfig = PROJECT_TYPES.find(t => t.id === project.projectType)
-            return (
-              <Card
+        <>
+          <div className={styles.cardGrid}>
+            {paginatedProjects.map(project => {
+              const typeConfig = PROJECT_TYPES.find(t => t.id === project.projectType)
+              return (
+                <Card
                 key={project.id}
                 className={styles.projectCard}
                 hoverable
@@ -1273,8 +1302,28 @@ export function Projects() {
                 </div>
               </Card>
             )
-          })}
-        </div>
+            })}
+          </div>
+          
+          {/* 分页器 */}
+          {filteredProjects.length > pageSize && (
+            <div className={styles.pagination}>
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={filteredProjects.length}
+                onChange={(page, size) => {
+                  setCurrentPage(page)
+                  if (size !== pageSize) setPageSize(size)
+                }}
+                showSizeChanger
+                showQuickJumper
+                showTotal={(total, range) => `${range[0]}-${range[1]} / 共 ${total} 个项目`}
+                pageSizeOptions={['12', '24', '48', '96']}
+              />
+            </div>
+          )}
+        </>
       ) : (
         <div className={styles.emptyState}>
           {projects.length > 0 && !searchQuery ? (
