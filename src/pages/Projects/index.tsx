@@ -264,7 +264,8 @@ export function Projects() {
   }
 
   const filterProjects = () => {
-    let filtered = [...projects]
+    // 反转数组，让最新添加的项目显示在前面
+    let filtered = [...projects].reverse()
     
     // 按类型筛选
     if (selectedType !== 'all') {
