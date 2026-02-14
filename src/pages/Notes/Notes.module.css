@@ -264,15 +264,17 @@
 }
 
 .detailContent code {
-  background: var(--bg-hover);
+  background: var(--code-inline-bg);
+  color: var(--code-inline-text);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
-  transition: background 0.3s;
+  font-weight: 500;
+  transition: background 0.3s, color 0.3s;
 }
 
 .detailContent pre {
-  background: var(--bg-tertiary);
+  background: var(--code-bg);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   padding: 12px;
@@ -281,7 +283,8 @@
 }
 
 .detailContent pre code {
-  background: none;
+  background: transparent;
+  color: var(--code-text);
   padding: 0;
 }
 

@@ -2,8 +2,22 @@
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-secondary);
+  background: var(--code-bg);
   transition: background 0.3s, border-color 0.3s;
+}
+
+.container pre {
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--code-text);
+}
+
+.container code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
 }
 
 .header {
