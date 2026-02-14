@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Card, Typography, List, Tag, Button, Empty, Alert, message } from 'antd'
 import { 
   PlusOutlined, RightOutlined, BookOutlined, FolderOutlined, SyncOutlined, QuestionCircleOutlined,
@@ -7,10 +6,11 @@ import {
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { storage } from '../../services/storage'
-import type { KnowledgeEntry, LocalProject, ProjectType, SyncProgress } from '../../types'
+import type { KnowledgeEntry, LocalProject, ProjectType } from '../../types'
 import { PROJECT_TYPES, KNOWLEDGE_CATEGORIES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
 import { Onboarding } from '../../components/Onboarding'
+import { useSync } from '../../contexts/SyncContext'
 import styles from './Dashboard.module.css'
 
 const { Title, Text } = Typography
@@ -28,8 +28,9 @@ export function Dashboard() {
   const [notesCount, setNotesCount] = useState(0)
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([])
   const [showGuide, setShowGuide] = useState(false)
-  const [syncing, setSyncing] = useState(false)
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null)
+  
+  // 使用全局同步状态
+  const { syncing, startSync, updateProgress, endSync } = useSync()
 
   useEffect(() => {
     loadData()
@@ -93,13 +94,13 @@ export function Dashboard() {
       } catch {}
     }
 
-    setSyncing(true)
+    startSync(`同步 ${pendingProjects[0]?.name || '项目'}`, pendingProjects.length)
     let synced = 0
     let errors = 0
 
     for (let i = 0; i < pendingProjects.length; i++) {
       const project = pendingProjects[i]
-      setSyncProgress({
+      updateProgress({
         step: `同步 ${project.name}`,
         current: i,
         total: pendingProjects.length,
@@ -120,11 +121,10 @@ export function Dashboard() {
       }
     }
 
-    setSyncProgress({ step: '同步完成', current: pendingProjects.length, total: pendingProjects.length })
+    updateProgress({ step: '同步完成', current: pendingProjects.length, total: pendingProjects.length })
     
     setTimeout(() => {
-      setSyncing(false)
-      setSyncProgress(null)
+      endSync()
       message.success(`一键同步完成: 成功 ${synced} 个项目, 失败 ${errors} 个`)
       // 刷新数据
       loadData()
@@ -188,50 +188,6 @@ export function Dashboard() {
 
   return (
     <div className={styles.container}>
-      {/* 同步进度条 - 使用 Portal 渲染到 body */}
-      {syncing && createPortal(
-        <div style={{
-          position: 'fixed',
-          top: 70,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          maxWidth: 340,
-          minWidth: 240,
-          background: 'rgba(22, 27, 34, 0.98)',
-          borderRadius: 12,
-          border: '1px solid #333',
-          padding: '12px 16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-          zIndex: 99999,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', fontSize: 13, color: '#fff', marginBottom: 8 }}>
-            <SyncOutlined spin style={{ marginRight: 8, color: '#58a6ff' }} />
-            <span>{syncProgress?.step || '同步中...'}</span>
-            {syncProgress && syncProgress.total > 0 && (
-              <span style={{ marginLeft: 'auto', color: '#58a6ff', fontWeight: 500 }}>
-                {syncProgress.current}/{syncProgress.total}
-              </span>
-            )}
-          </div>
-          <div style={{ height: 4, background: '#2a3f5f', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
-            <div style={{
-              height: '100%',
-              background: 'linear-gradient(90deg, #1677ff, #52c41a)',
-              borderRadius: 2,
-              transition: 'width 0.3s ease',
-              width: syncProgress && syncProgress.total > 0 
-                ? `${Math.min((syncProgress.current / syncProgress.total) * 100, 100)}%` 
-                : '30%'
-            }} />
-          </div>
-          {syncProgress?.file && (
-            <div style={{ fontSize: 12, color: '#8b949e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {syncProgress.file}
-            </div>
-          )}
-        </div>,
-        document.body
-      )}
 
       {/* 头部 */}
       <div className={styles.header}>

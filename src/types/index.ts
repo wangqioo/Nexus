@@ -4,6 +4,210 @@
 // ============================================================
 
 // ============================================================
+// .nexus 文档模板配置（全局）
+// ============================================================
+
+// 单个字段定义
+export interface TemplateField {
+  name: string           // 字段名（英文，用于 frontmatter）
+  label: string          // 显示名（中文）
+  type: 'text' | 'textarea' | 'tags' | 'select' | 'number' | 'date' | 'boolean'
+  required: boolean
+  placeholder?: string
+  options?: string[]     // select 类型的选项
+  default?: string | number | boolean | string[]
+}
+
+// 单个文档类型的模板配置
+export interface DocumentTemplate {
+  id: string             // 模板ID: debug, snippet, note, config
+  name: string           // 显示名
+  icon: string           // 图标
+  description: string    // 描述
+  fileExtension: string  // 文件扩展名 (.md)
+  frontmatterFields: TemplateField[]  // YAML frontmatter 字段
+  contentTemplate: string             // Markdown 内容模板
+  aiPrompt: string                    // AI 生成时的 prompt 指导
+}
+
+// 全局模板配置
+export interface NexusTemplateConfig {
+  version: string
+  templates: {
+    debug: DocumentTemplate
+    snippet: DocumentTemplate
+    note: DocumentTemplate
+    config: DocumentTemplate
+  }
+  // 通用设置
+  settings: {
+    autoAddTimestamp: boolean    // 自动添加时间戳
+    defaultTags: string[]        // 默认标签
+    aiAnalysisEnabled: boolean   // 启用 AI 分析
+  }
+}
+
+// 默认模板配置
+export const DEFAULT_TEMPLATE_CONFIG: NexusTemplateConfig = {
+  version: '1.0',
+  templates: {
+    debug: {
+      id: 'debug',
+      name: '调试经验',
+      icon: 'BugOutlined',
+      description: '记录 bug 修复过程和问题排查经验',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '问题简述' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'severity', label: '严重程度', type: 'select', required: false, options: ['critical', 'major', 'minor', 'trivial'], default: 'minor' },
+        { name: 'status', label: '状态', type: 'select', required: false, options: ['resolved', 'workaround', 'investigating'], default: 'resolved' },
+        { name: 'platform', label: '平台', type: 'text', required: false, placeholder: '如 ESP32-S3' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 问题描述
+<!-- 描述遇到的问题现象 -->
+
+## 错误信息
+\`\`\`
+<!-- 粘贴错误日志 -->
+\`\`\`
+
+## 根因分析
+<!-- 分析问题的根本原因 -->
+
+## 解决方案
+<!-- 详细描述解决步骤 -->
+
+## 相关代码
+\`\`\`c
+// 修复后的代码
+\`\`\`
+
+## 经验总结
+<!-- 这次问题带来的教训或经验 -->
+`,
+      aiPrompt: `请帮我记录这个调试经验。要求：
+1. 标题简洁明了，概括问题本质
+2. 问题描述要包含复现条件
+3. 根因分析要深入，不只是表面现象
+4. 解决方案要具体可操作
+5. 如果有代码修改，请包含关键代码片段
+6. 总结要提炼出可复用的经验`,
+    },
+    snippet: {
+      id: 'snippet',
+      name: '代码片段',
+      icon: 'CodeOutlined',
+      description: '保存可复用的代码模板',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '代码片段名称' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'language', label: '编程语言', type: 'select', required: true, options: ['c', 'cpp', 'python', 'javascript', 'typescript', 'rust', 'go', 'shell', 'other'], default: 'c' },
+        { name: 'category', label: '分类', type: 'select', required: false, options: ['driver', 'algorithm', 'utility', 'config', 'template', 'other'], default: 'utility' },
+        { name: 'platform', label: '适用平台', type: 'text', required: false, placeholder: '如 ESP-IDF, Arduino' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 功能说明
+<!-- 这段代码的作用 -->
+
+## 代码
+\`\`\`c
+// 代码内容
+\`\`\`
+
+## 使用方法
+<!-- 如何使用这段代码 -->
+
+## 依赖说明
+<!-- 需要的头文件、库等 -->
+
+## 注意事项
+<!-- 使用时需要注意的点 -->
+`,
+      aiPrompt: `请帮我保存这个代码片段。要求：
+1. 标题要清晰表达代码功能
+2. 功能说明简洁但完整
+3. 代码要有适当的注释
+4. 说明使用方法和参数
+5. 列出依赖的库或头文件
+6. 提醒使用时的注意事项`,
+    },
+    note: {
+      id: 'note',
+      name: '开发笔记',
+      icon: 'FileTextOutlined',
+      description: '记录学习心得和技术要点',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '笔记标题' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'category', label: '分类', type: 'select', required: false, options: ['learning', 'design', 'issue', 'summary', 'reference'], default: 'learning' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 背景
+<!-- 为什么要记录这个 -->
+
+## 核心内容
+<!-- 主要知识点 -->
+
+## 示例
+<!-- 代码示例或实际案例 -->
+
+## 参考资料
+<!-- 相关链接或文档 -->
+`,
+      aiPrompt: `请帮我记录这个开发笔记。要求：
+1. 标题要能概括核心内容
+2. 说明记录的背景和目的
+3. 核心内容要条理清晰
+4. 如果有代码，请包含示例
+5. 附上相关的参考资料链接`,
+    },
+    config: {
+      id: 'config',
+      name: '配置模板',
+      icon: 'SettingOutlined',
+      description: '保存重要的配置文件',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '配置名称' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'configType', label: '配置类型', type: 'select', required: false, options: ['build', 'env', 'device', 'network', 'other'], default: 'other' },
+        { name: 'platform', label: '适用平台', type: 'text', required: false, placeholder: '如 ESP-IDF 5.x' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 配置说明
+<!-- 这个配置的作用 -->
+
+## 配置内容
+\`\`\`
+# 配置文件内容
+\`\`\`
+
+## 关键参数说明
+<!-- 重要参数的含义 -->
+
+## 使用场景
+<!-- 什么情况下使用这个配置 -->
+`,
+      aiPrompt: `请帮我保存这个配置模板。要求：
+1. 标题要清晰表达配置用途
+2. 说明配置的作用和适用场景
+3. 保留完整的配置内容
+4. 解释关键参数的含义
+5. 说明使用时需要修改的地方`,
+    },
+  },
+  settings: {
+    autoAddTimestamp: true,
+    defaultTags: [],
+    aiAnalysisEnabled: true,
+  },
+}
+
+// ============================================================
 // 项目类型定义
 // ============================================================
 
@@ -173,6 +377,10 @@ export interface ElectronAPI {
   deleteFile: (filePath: string) => Promise<boolean>
   listFiles: (dirPath: string) => Promise<string[]>
   exists: (filePath: string) => Promise<boolean>
+  // 模板配置管理
+  getTemplateConfig: () => Promise<NexusTemplateConfig>
+  updateTemplateConfig: (config: Partial<NexusTemplateConfig>) => Promise<boolean>
+  resetTemplateConfig: () => Promise<NexusTemplateConfig>
   getDataDir: () => Promise<string>
   readMarkdown: (filePath: string) => Promise<MarkdownParseResult | null>
   // 项目导入

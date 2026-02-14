@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   Typography, Input, Button, Card, Tag, Empty, Space,
@@ -13,9 +14,8 @@ import {
   ReloadOutlined, ImportOutlined, ExportOutlined, EyeOutlined,
   ThunderboltOutlined, GithubOutlined, ClockCircleOutlined, RightOutlined
 } from '@ant-design/icons'
-import type { LocalProject, SilProjectConfig, SilDocument, SilProjectData, ProjectType } from '../../types'
+import type { LocalProject, SilProjectConfig, SilDocument, SilProjectData, ProjectType, SyncProgress } from '../../types'
 import { PROJECT_TYPES } from '../../types'
-import { useSync } from '../../contexts/SyncContext'
 
 // 格式化相对时间
 const formatRelativeTime = (dateStr?: string) => {
@@ -36,6 +36,7 @@ const formatRelativeTime = (dateStr?: string) => {
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 import { getProjectTypeIcon } from '../../components/Icons'
+import { useSync } from '../../contexts/SyncContext'
 import styles from './Projects.module.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -75,8 +76,12 @@ export function Projects() {
   const [importSuccessOpen, setImportSuccessOpen] = useState(false)
   const [importedProject, setImportedProject] = useState<LocalProject | null>(null)
   
+  // 同步进度状态
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  
   // 使用全局同步状态
-  const { syncing, syncProgress, startSync, updateProgress, endSync } = useSync()
+  const { startSync, updateProgress, endSync } = useSync()
   
   // 加载 API Key
   useEffect(() => {
@@ -691,14 +696,15 @@ export function Projects() {
       return
     }
     
-    startSync('扫描文档...', 1)
+    setSyncing(true)
+    setSyncProgress({ step: '扫描文档...', current: 0, total: 1 })
     
     try {
       // 传入 API Key 以启用 AI 分析
       const result = await window.electronAPI.syncFromProject(project.path, apiKey || undefined)
       
       // 更新进度为完成
-      updateProgress({ step: '同步完成', current: 1, total: 1 })
+      setSyncProgress({ step: '同步完成', current: 1, total: 1 })
       
       if (result.success) {
         const total = result.imported + result.updated
@@ -720,7 +726,8 @@ export function Projects() {
     } catch (err: any) {
       message.error(`同步出错: ${err.message || '未知错误'}`)
     } finally {
-      endSync()
+      setSyncing(false)
+      setSyncProgress(null)
     }
   }
 
@@ -1017,50 +1024,6 @@ export function Projects() {
 
   return (
     <div className={styles.container}>
-      {/* 同步进度条 - 使用 Portal 渲染到 body */}
-      {syncing && createPortal(
-        <div style={{
-          position: 'fixed',
-          top: 70,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          maxWidth: 340,
-          minWidth: 240,
-          background: 'rgba(22, 27, 34, 0.98)',
-          borderRadius: 12,
-          border: '1px solid #333',
-          padding: '12px 16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-          zIndex: 99999,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', fontSize: 13, color: '#fff', marginBottom: 8 }}>
-            <SyncOutlined spin style={{ marginRight: 8, color: '#58a6ff' }} />
-            <span>{syncProgress?.step || '同步中...'}</span>
-            {syncProgress && syncProgress.total > 0 && (
-              <span style={{ marginLeft: 'auto', color: '#58a6ff', fontWeight: 500 }}>
-                {syncProgress.current}/{syncProgress.total}
-              </span>
-            )}
-          </div>
-          <div style={{ height: 4, background: '#2a3f5f', borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
-            <div style={{
-              height: '100%',
-              background: 'linear-gradient(90deg, #1677ff, #52c41a)',
-              borderRadius: 2,
-              transition: 'width 0.3s ease',
-              width: syncProgress && syncProgress.total > 0 
-                ? `${Math.min((syncProgress.current / syncProgress.total) * 100, 100)}%` 
-                : '30%'
-            }} />
-          </div>
-          {syncProgress?.file && (
-            <div style={{ fontSize: 12, color: '#8b949e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {syncProgress.file}
-            </div>
-          )}
-        </div>,
-        document.body
-      )}
       
       {/* ====== 头部（与知识库统一） ====== */}
       <div className={styles.header}>
