@@ -1,13 +1,9 @@
 // ============================================================
-// Nexus 存储服务 v5.0
-// 统一知识库格式 - 所有数据存储在 knowledge/{type}/{category}/
-// 旧格式 API 通过转换层使用知识库后端
+// Nexus 存储服务 v6.0
+// 统一知识库格式 - 简化版（移除不再使用的旧 API）
 // ============================================================
 
-import type { 
-  Platform, Peripheral, CodeSnippet, DebugExperience,
-  ConfigTemplate, Project, Note, KnowledgeEntry, ProjectType
-} from '../types'
+import type { Note, KnowledgeEntry, ProjectType } from '../types'
 import { KNOWLEDGE_CATEGORIES } from '../types'
 
 // 检查是否在 Electron 环境中
@@ -82,11 +78,11 @@ async function deleteFilePath(path: string): Promise<boolean> {
 }
 
 // ============================================================
-// 知识库 (KnowledgeEntry) - 唯一存储格式
-// 目录结构: knowledge/{projectType}/{category}/{id}.json|.md
+// 知识库 (KnowledgeEntry) - 核心 API
+// 目录结构: knowledge/{projectType}/{category}/{id}.json
 // ============================================================
 
-// Markdown -> KnowledgeEntry
+// Markdown -> KnowledgeEntry (用于读取 .md 文件)
 async function readMarkdownAsKnowledge(
   filePath: string, 
   filename: string, 
@@ -122,34 +118,27 @@ async function readMarkdownAsKnowledge(
   }
 }
 
-// 统一获取所有知识条目 (仅从 knowledge/ 目录读取)
+// 统一获取所有知识条目
 async function listAllKnowledge(type?: ProjectType, category?: string): Promise<KnowledgeEntry[]> {
   const entries: KnowledgeEntry[] = []
   const types: ProjectType[] = type 
     ? [type] 
     : ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
   
-  console.log('[Storage] listAllKnowledge - types:', types)
-  
   for (const t of types) {
     const cats = category ? [category] : KNOWLEDGE_CATEGORIES[t]?.map(c => c.id) || []
-    console.log(`[Storage] Type ${t} categories:`, cats)
     
     for (const cat of cats) {
       const dirPath = `knowledge/${t}/${cat}`
       let files: string[] = []
       try {
         files = await listDir(dirPath)
-        if (files.length > 0) {
-          console.log(`[Storage] ${dirPath}: ${files.length} files`)
-        }
       } catch { continue }
       
       const readPromises = files.map(async (file) => {
         if (file.endsWith('.json')) {
           const data = await readJSON<KnowledgeEntry>(`${dirPath}/${file}`)
           if (!data) return null
-          // 确保必要字段
           return {
             ...data,
             projectType: data.projectType || t,
@@ -210,390 +199,9 @@ async function getKnowledgeStats(): Promise<{
 }
 
 // ============================================================
-// 类型转换工具 (KnowledgeEntry <-> 专用类型)
-// 保持旧页面的 API 不变，内部使用知识库后端
+// Note - 独立存储
+// 目录结构: notes/{id}.json
 // ============================================================
-
-// --- Platform ---
-
-function platformToKnowledge(p: Platform): KnowledgeEntry {
-  return {
-    id: p.id,
-    title: p.name,
-    content: `芯片: ${p.chip.name} (${p.chip.manufacturer})\n内核: ${p.chip.core}\n框架: ${p.framework.name} ${p.framework.version || ''}\n构建: ${p.framework.buildSystem}`,
-    projectType: 'mcu',
-    category: 'platform',
-    tags: [p.chip.name, p.framework.name, p.chip.manufacturer, ...(p.chip.features || [])].filter(Boolean),
-    metadata: {
-      chip: p.chip,
-      framework: p.framework,
-      toolchain: p.toolchain,
-      pinout: p.pinout,
-      notes: p.notes,
-    },
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  }
-}
-
-function knowledgeToPlatform(e: KnowledgeEntry): Platform {
-  const m = e.metadata || {}
-  return {
-    id: e.id,
-    name: e.title,
-    chip: m.chip || { name: '', manufacturer: '', core: '', features: [] },
-    framework: m.framework || { name: '', buildSystem: '', configFiles: [] },
-    toolchain: m.toolchain || { compiler: '' },
-    pinout: m.pinout,
-    notes: m.notes,
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-  }
-}
-
-// --- Peripheral ---
-
-function peripheralToKnowledge(p: Peripheral): KnowledgeEntry {
-  return {
-    id: p.id,
-    title: p.name,
-    content: `**${p.type}** | 接口: ${p.interface?.type?.toUpperCase() || ''} ${p.interface?.speed || ''}\n\n${p.notes || ''}`,
-    projectType: 'mcu',
-    category: 'peripheral',
-    tags: p.tags || [],
-    metadata: {
-      type: p.type,
-      manufacturer: p.manufacturer,
-      interface: p.interface,
-      specs: p.specs,
-      defaultWiring: p.defaultWiring,
-      snippetIds: p.snippetIds,
-      datasheet: p.datasheet,
-      notes: p.notes,
-    },
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  }
-}
-
-function knowledgeToPeripheral(e: KnowledgeEntry): Peripheral {
-  const m = e.metadata || {}
-  return {
-    id: e.id,
-    name: e.title,
-    type: m.type || 'other',
-    manufacturer: m.manufacturer,
-    interface: m.interface || { type: 'other' },
-    specs: m.specs,
-    defaultWiring: m.defaultWiring || [],
-    snippetIds: m.snippetIds || [],
-    datasheet: m.datasheet,
-    tags: e.tags || [],
-    notes: m.notes,
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-  }
-}
-
-// --- CodeSnippet ---
-
-function snippetToKnowledge(s: CodeSnippet): KnowledgeEntry {
-  return {
-    id: s.id,
-    title: s.name,
-    content: s.code || s.description || '',
-    projectType: 'mcu',
-    category: 'snippet',
-    tags: s.tags || [],
-    metadata: {
-      language: s.language,
-      snippetCategory: s.category,
-      description: s.description,
-      code: s.code,
-      usage: s.usage,
-      dependencies: s.dependencies,
-      platformIds: s.platformIds,
-      peripheralIds: s.peripheralIds,
-      sourceProject: s.sourceProject,
-      sourceFile: s.sourceFile,
-    },
-    createdAt: s.createdAt,
-    updatedAt: s.updatedAt,
-  }
-}
-
-function knowledgeToSnippet(e: KnowledgeEntry): CodeSnippet {
-  const m = e.metadata || {}
-  return {
-    id: e.id,
-    name: e.title,
-    category: m.snippetCategory || m.category || 'utility',
-    platformIds: m.platformIds || [],
-    peripheralIds: m.peripheralIds || [],
-    language: m.language || 'c',
-    code: m.code || e.content || '',
-    description: m.description || '',
-    usage: m.usage,
-    dependencies: m.dependencies,
-    sourceProject: m.sourceProject,
-    sourceFile: m.sourceFile,
-    tags: e.tags || [],
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-  }
-}
-
-// --- DebugExperience ---
-
-function debugToKnowledge(d: DebugExperience): KnowledgeEntry {
-  return {
-    id: d.id,
-    title: d.title,
-    content: d.solution || d.symptom || '',
-    projectType: 'mcu',
-    category: 'debug',
-    tags: d.tags || [],
-    severity: d.severity,
-    metadata: {
-      symptom: d.symptom,
-      errorLog: d.errorLog,
-      rootCause: d.rootCause,
-      solution: d.solution,
-      solutionCode: d.solutionCode,
-      environment: d.environment,
-      relatedSnippetIds: d.relatedSnippetIds,
-    },
-    createdAt: d.createdAt,
-    updatedAt: d.updatedAt,
-  }
-}
-
-function knowledgeToDebug(e: KnowledgeEntry): DebugExperience {
-  const m = e.metadata || {}
-  return {
-    id: e.id,
-    title: e.title,
-    environment: m.environment || {},
-    symptom: m.symptom || '',
-    errorLog: m.errorLog,
-    rootCause: m.rootCause || '',
-    solution: m.solution || e.content || '',
-    solutionCode: m.solutionCode,
-    relatedSnippetIds: m.relatedSnippetIds,
-    severity: e.severity || 'minor',
-    tags: e.tags || [],
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-  }
-}
-
-// --- ConfigTemplate ---
-
-function configToKnowledge(c: ConfigTemplate): KnowledgeEntry {
-  return {
-    id: c.id,
-    title: c.name,
-    content: c.description || '',
-    projectType: 'mcu',
-    category: 'config',
-    tags: c.tags || [],
-    metadata: {
-      description: c.description,
-      files: c.files,
-      platformId: c.platformId,
-      peripheralIds: c.peripheralIds,
-      sourceProject: c.sourceProject,
-    },
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-  }
-}
-
-function knowledgeToConfig(e: KnowledgeEntry): ConfigTemplate {
-  const m = e.metadata || {}
-  return {
-    id: e.id,
-    name: e.title,
-    description: m.description || e.content || '',
-    platformId: m.platformId || '',
-    peripheralIds: m.peripheralIds,
-    files: m.files || [],
-    sourceProject: m.sourceProject,
-    tags: e.tags || [],
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-  }
-}
-
-// ============================================================
-// 旧 API (内部使用知识库后端)
-// 保持函数签名不变，旧页面无需修改
-// ============================================================
-
-// --- Platform ---
-
-async function listPlatforms(): Promise<Platform[]> {
-  const entries = await listAllKnowledge('mcu', 'platform')
-  return entries.map(knowledgeToPlatform)
-}
-
-async function getPlatform(id: string): Promise<Platform | null> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const entry = await readJSON<KnowledgeEntry>(`knowledge/mcu/platform/${safeId}.json`)
-  if (!entry) return null
-  return knowledgeToPlatform(entry)
-}
-
-async function savePlatform(platform: Platform): Promise<boolean> {
-  return saveKnowledgeEntry(platformToKnowledge(platform))
-}
-
-async function deletePlatform(id: string): Promise<boolean> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  return deleteFilePath(`knowledge/mcu/platform/${safeId}.json`)
-}
-
-// --- Peripheral ---
-
-async function listPeripherals(): Promise<Peripheral[]> {
-  const entries = await listAllKnowledge('mcu', 'peripheral')
-  return entries.map(knowledgeToPeripheral)
-}
-
-async function getPeripheral(id: string): Promise<Peripheral | null> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const entry = await readJSON<KnowledgeEntry>(`knowledge/mcu/peripheral/${safeId}.json`)
-  if (!entry) return null
-  return knowledgeToPeripheral(entry)
-}
-
-async function savePeripheral(peripheral: Peripheral): Promise<boolean> {
-  return saveKnowledgeEntry(peripheralToKnowledge(peripheral))
-}
-
-async function deletePeripheral(id: string): Promise<boolean> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  return deleteFilePath(`knowledge/mcu/peripheral/${safeId}.json`)
-}
-
-async function getPeripheralsByType(type: string): Promise<Peripheral[]> {
-  const all = await listPeripherals()
-  return all.filter(p => p.type === type)
-}
-
-// --- CodeSnippet ---
-
-async function listSnippets(): Promise<CodeSnippet[]> {
-  const entries = await listAllKnowledge('mcu', 'snippet')
-  return entries.map(knowledgeToSnippet)
-}
-
-async function getSnippet(id: string): Promise<CodeSnippet | null> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const entry = await readJSON<KnowledgeEntry>(`knowledge/mcu/snippet/${safeId}.json`)
-  if (!entry) return null
-  return knowledgeToSnippet(entry)
-}
-
-async function saveSnippet(snippet: CodeSnippet): Promise<boolean> {
-  return saveKnowledgeEntry(snippetToKnowledge(snippet))
-}
-
-async function deleteSnippet(id: string): Promise<boolean> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  return deleteFilePath(`knowledge/mcu/snippet/${safeId}.json`)
-}
-
-async function getSnippetsByCategory(category: string): Promise<CodeSnippet[]> {
-  const all = await listSnippets()
-  return all.filter(s => s.category === category)
-}
-
-async function getSnippetsForPeripheral(peripheralId: string): Promise<CodeSnippet[]> {
-  const all = await listSnippets()
-  return all.filter(s => s.peripheralIds.includes(peripheralId))
-}
-
-async function getSnippetsForPlatform(platformId: string): Promise<CodeSnippet[]> {
-  const all = await listSnippets()
-  return all.filter(s => s.platformIds.includes(platformId))
-}
-
-// --- DebugExperience ---
-
-async function listDebugExperiences(): Promise<DebugExperience[]> {
-  const entries = await listAllKnowledge('mcu', 'debug')
-  return entries.map(knowledgeToDebug)
-}
-
-async function getDebugExperience(id: string): Promise<DebugExperience | null> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const entry = await readJSON<KnowledgeEntry>(`knowledge/mcu/debug/${safeId}.json`)
-  if (!entry) return null
-  return knowledgeToDebug(entry)
-}
-
-async function saveDebugExperience(exp: DebugExperience): Promise<boolean> {
-  return saveKnowledgeEntry(debugToKnowledge(exp))
-}
-
-async function deleteDebugExperience(id: string): Promise<boolean> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  return deleteFilePath(`knowledge/mcu/debug/${safeId}.json`)
-}
-
-async function getDebugExperiencesForPlatform(platformId: string): Promise<DebugExperience[]> {
-  const all = await listDebugExperiences()
-  return all.filter(e => e.environment.platformId === platformId)
-}
-
-// --- ConfigTemplate ---
-
-async function listConfigTemplates(): Promise<ConfigTemplate[]> {
-  const entries = await listAllKnowledge('mcu', 'config')
-  return entries.map(knowledgeToConfig)
-}
-
-async function getConfigTemplate(id: string): Promise<ConfigTemplate | null> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const entry = await readJSON<KnowledgeEntry>(`knowledge/mcu/config/${safeId}.json`)
-  if (!entry) return null
-  return knowledgeToConfig(entry)
-}
-
-async function saveConfigTemplate(template: ConfigTemplate): Promise<boolean> {
-  return saveKnowledgeEntry(configToKnowledge(template))
-}
-
-async function deleteConfigTemplate(id: string): Promise<boolean> {
-  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  return deleteFilePath(`knowledge/mcu/config/${safeId}.json`)
-}
-
-// ============================================================
-// Note (独立格式，不变)
-// ============================================================
-
-async function listNotes(): Promise<Note[]> {
-  const files = await listDir('notes')
-  const items: Note[] = []
-  
-  const readPromises = files.map(async (file) => {
-    if (file.endsWith('.json')) {
-      return readJSON<Note>(`notes/${file}`)
-    } else if (file.endsWith('.md') && isElectron()) {
-      return readMarkdownAsNote(`notes/${file}`, file)
-    }
-    return null
-  })
-  
-  const results = await Promise.all(readPromises)
-  for (const item of results) {
-    if (item) items.push(item)
-  }
-  
-  return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-}
 
 // 根据文件名和内容智能推断笔记分类
 function inferNoteCategory(filename: string, content: string): string {
@@ -631,6 +239,27 @@ async function readMarkdownAsNote(filePath: string, filename: string): Promise<N
   }
 }
 
+async function listNotes(): Promise<Note[]> {
+  const files = await listDir('notes')
+  const items: Note[] = []
+  
+  const readPromises = files.map(async (file) => {
+    if (file.endsWith('.json')) {
+      return readJSON<Note>(`notes/${file}`)
+    } else if (file.endsWith('.md') && isElectron()) {
+      return readMarkdownAsNote(`notes/${file}`, file)
+    }
+    return null
+  })
+  
+  const results = await Promise.all(readPromises)
+  for (const item of results) {
+    if (item) items.push(item)
+  }
+  
+  return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+}
+
 async function getNote(id: string): Promise<Note | null> {
   return readJSON<Note>(`notes/${id}.json`)
 }
@@ -644,31 +273,37 @@ async function deleteNote(id: string): Promise<boolean> {
 }
 
 // ============================================================
-// Project (独立格式，不变)
+// 按项目获取关联文档（双向索引）
 // ============================================================
 
-async function listProjects(): Promise<Project[]> {
-  const files = await listDir('projects')
-  const items: Project[] = []
-  for (const file of files) {
-    if (file.endsWith('.json')) {
-      const item = await readJSON<Project>(`projects/${file}`)
-      if (item) items.push(item)
-    }
-  }
-  return items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-}
-
-async function getProject(id: string): Promise<Project | null> {
-  return readJSON<Project>(`projects/${id}.json`)
-}
-
-async function saveProject(project: Project): Promise<boolean> {
-  return writeJSON(`projects/${project.id}.json`, project)
-}
-
-async function deleteProject(id: string): Promise<boolean> {
-  return deleteFilePath(`projects/${id}.json`)
+async function getDocumentsByProject(projectPath: string): Promise<{
+  knowledge: KnowledgeEntry[]
+  notes: Note[]
+}> {
+  const [allKnowledge, allNotes] = await Promise.all([
+    listAllKnowledge(),
+    listNotes(),
+  ])
+  
+  const projectName = projectPath.split('/').pop() || ''
+  
+  const knowledge = allKnowledge.filter(entry => {
+    const source = entry.sourceProject || entry.projectPath || entry.metadata?.sourceProject
+    if (!source) return false
+    return source === projectPath || 
+           source.endsWith(`/${projectName}`) ||
+           source === projectName
+  })
+  
+  const notes = allNotes.filter(note => {
+    const source = note.sourceProject || note.projectPath
+    if (!source) return false
+    return source === projectPath || 
+           source.endsWith(`/${projectName}`) ||
+           source === projectName
+  })
+  
+  return { knowledge, notes }
 }
 
 // ============================================================
@@ -694,12 +329,6 @@ async function getStats() {
     notes: notes.length,
     byType,
     byCategory,
-    platforms: byCategory['mcu/platform'] || 0,
-    peripherals: byCategory['mcu/peripheral'] || 0,
-    snippets: byCategory['mcu/snippet'] || 0,
-    debug: byCategory['mcu/debug'] || 0,
-    configs: byCategory['mcu/config'] || 0,
-    projects: 0,
   }
 }
 
@@ -708,52 +337,21 @@ async function getStats() {
 // ============================================================
 
 export const storage = {
-  // 统一知识库 (核心 API)
+  // 知识库 (核心 API)
   listAllKnowledge,
   saveKnowledgeEntry,
   deleteKnowledgeEntry,
   getKnowledgeStats,
   
-  // 旧接口 (内部使用知识库后端)
-  listPlatforms,
-  getPlatform,
-  savePlatform,
-  deletePlatform,
-  
-  listPeripherals,
-  getPeripheral,
-  savePeripheral,
-  deletePeripheral,
-  getPeripheralsByType,
-  
-  listSnippets,
-  getSnippet,
-  saveSnippet,
-  deleteSnippet,
-  getSnippetsByCategory,
-  getSnippetsForPeripheral,
-  getSnippetsForPlatform,
-  
-  listDebugExperiences,
-  getDebugExperience,
-  saveDebugExperience,
-  deleteDebugExperience,
-  getDebugExperiencesForPlatform,
-  
-  listConfigTemplates,
-  getConfigTemplate,
-  saveConfigTemplate,
-  deleteConfigTemplate,
-  
-  listProjects,
-  getProject,
-  saveProject,
-  deleteProject,
-  
+  // 笔记
   listNotes,
   getNote,
   saveNote,
   deleteNote,
   
+  // 双向索引
+  getDocumentsByProject,
+  
+  // 统计
   getStats,
 }

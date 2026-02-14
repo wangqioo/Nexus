@@ -17,11 +17,11 @@ interface SearchModalProps {
 }
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string; route: string }> = {
-  platform: { icon: <CloudServerOutlined />, color: 'blue', label: '平台', route: '/platforms' },
-  peripheral: { icon: <UsbOutlined />, color: 'cyan', label: '外设', route: '/peripherals' },
-  snippet: { icon: <CodeOutlined />, color: 'green', label: '代码', route: '/snippets' },
-  debug: { icon: <BugOutlined />, color: 'red', label: '调试', route: '/debug' },
-  config: { icon: <SettingOutlined />, color: 'orange', label: '配置', route: '/configs' },
+  platform: { icon: <CloudServerOutlined />, color: 'blue', label: '平台', route: '/knowledge' },
+  peripheral: { icon: <UsbOutlined />, color: 'cyan', label: '外设', route: '/knowledge' },
+  snippet: { icon: <CodeOutlined />, color: 'green', label: '代码', route: '/knowledge' },
+  debug: { icon: <BugOutlined />, color: 'red', label: '调试', route: '/knowledge' },
+  config: { icon: <SettingOutlined />, color: 'orange', label: '配置', route: '/knowledge' },
   note: { icon: <FileTextOutlined />, color: 'purple', label: '笔记', route: '/notes' },
 }
 
@@ -50,7 +50,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
 
   const handleResultClick = (result: SearchResult) => {
     const config = typeConfig[result.type]
-    navigate(config?.route || '/', { state: { selectedId: result.id } })
+    const route = config?.route || '/'
+    // Knowledge 和 Notes 页面使用 searchParams.docId 来定位文档
+    navigate(`${route}?docId=${encodeURIComponent(result.id)}`)
     onClose()
   }
 

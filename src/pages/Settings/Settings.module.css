@@ -1,0 +1,229 @@
+.container {
+  padding: 24px;
+  max-width: 1200px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 !important;
+  color: var(--text-primary) !important;
+  transition: color 0.3s;
+}
+
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.card :global(.ant-card-head) {
+  border-bottom-color: var(--border-primary);
+  transition: border-color 0.3s;
+}
+
+.card :global(.ant-card-head-title) {
+  color: var(--text-primary);
+  transition: color 0.3s;
+}
+
+.tabs {
+  min-height: 500px;
+}
+
+.tabs :global(.ant-tabs-tab) {
+  padding: 12px 16px !important;
+}
+
+.tabs :global(.ant-tabs-tab-active) {
+  background: rgba(22, 119, 255, 0.1);
+  border-radius: 4px;
+}
+
+.tabs :global(.ant-tabs-content) {
+  padding-left: 24px;
+}
+
+/* 模板编辑器 */
+.templateEditor {
+  padding: 8px 0;
+}
+
+.templateHeader {
+  display: flex;
+  align-items: center;
+}
+
+/* 字段编辑器 */
+.fieldsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fieldEditor {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fieldOptions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 代码编辑器 */
+.codeEditor {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace !important;
+  font-size: 13px !important;
+  background: var(--bg-primary) !important;
+  border-color: var(--border-primary) !important;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.codeEditor:focus {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2) !important;
+}
+
+/* 预览 */
+.preview {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.preview pre {
+  margin: 0;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--accent-success);
+  white-space: pre-wrap;
+}
+
+/* Form 样式 */
+.card :global(.ant-form-item-label > label) {
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+.card :global(.ant-input),
+.card :global(.ant-input-affix-wrapper),
+.card :global(.ant-select-selector) {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-primary) !important;
+  color: var(--text-primary) !important;
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.card :global(.ant-input:hover),
+.card :global(.ant-input-affix-wrapper:hover),
+.card :global(.ant-select-selector:hover) {
+  border-color: var(--accent-primary) !important;
+}
+
+.card :global(.ant-input:focus),
+.card :global(.ant-input-affix-wrapper-focused),
+.card :global(.ant-select-focused .ant-select-selector) {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2) !important;
+}
+
+.card :global(.ant-select-selection-item) {
+  color: var(--text-primary);
+  transition: color 0.3s;
+}
+
+/* Collapse 样式 */
+.card :global(.ant-collapse-header) {
+  color: var(--text-primary) !important;
+  transition: color 0.3s;
+}
+
+.card :global(.ant-collapse-content) {
+  background: transparent;
+  border-top-color: var(--border-primary);
+}
+
+/* Alert 样式 */
+:global(.ant-alert-info) {
+  background: rgba(22, 119, 255, 0.1);
+  border-color: rgba(22, 119, 255, 0.3);
+}
+
+:global(.ant-alert-message) {
+  color: var(--accent-primary);
+}
+
+:global(.ant-alert-description) {
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+:global(.ant-alert-description ul li) {
+  margin: 4px 0;
+}
+
+:global(.ant-alert-description strong) {
+  color: var(--text-primary);
+  transition: color 0.3s;
+}
+
+/* 项目使用记录列表 */
+.projectUsageList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.projectUsageItem {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 12px;
+  transition: border-color 0.2s, background 0.3s;
+}
+
+.projectUsageItem:hover {
+  border-color: var(--accent-primary);
+}
+
+/* Timeline 样式 */
+.card :global(.ant-timeline-item-label) {
+  width: 140px !important;
+}
+
+.card :global(.ant-timeline-item-content) {
+  color: var(--text-primary);
+  transition: color 0.3s;
+}
+
+/* Empty 样式 */
+.card :global(.ant-empty-description) {
+  color: var(--text-tertiary);
+  transition: color 0.3s;
+}

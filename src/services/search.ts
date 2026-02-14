@@ -29,13 +29,37 @@ export function useSearch() {
       keys: ['title', 'content', 'tags', 'category']
     })
 
-    // 分类到旧 SearchResult type 的映射
+    // 分类到 SearchResult type 的映射（覆盖所有项目类型的分类）
     const typeMap: Record<string, SearchResult['type']> = {
+      // MCU 类型
       platform: 'platform',
       peripheral: 'peripheral',
       snippet: 'snippet',
       debug: 'debug',
       config: 'config',
+      // AI 类型
+      model: 'config',
+      training: 'debug',
+      inference: 'snippet',
+      dataset: 'config',
+      prompt: 'snippet',
+      // Software 类型
+      architecture: 'platform',
+      api: 'snippet',
+      database: 'config',
+      deployment: 'config',
+      // Linux 类型
+      system: 'platform',
+      driver: 'peripheral',
+      network: 'config',
+      'cross-compile': 'config',
+      // Mobile 类型
+      ui: 'snippet',
+      native: 'peripheral',
+      performance: 'debug',
+      // Remote 类型
+      connection: 'config',
+      monitoring: 'debug',
     }
 
     knowledgeFuse.search(query).forEach(result => {

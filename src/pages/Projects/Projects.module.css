@@ -16,7 +16,8 @@
 
 .title {
   margin: 0 !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
+  transition: color 0.3s;
 }
 
 .headerActions {
@@ -34,11 +35,12 @@
 .sectionLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 10px;
   padding-left: 2px;
+  transition: color 0.3s;
 }
 
 .typeTabs {
@@ -53,9 +55,9 @@
   gap: 8px;
   padding: 10px 18px;
   border-radius: 12px;
-  border: 1px solid #333;
-  background: #1a1a1a;
-  color: #aaa;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   font-size: 14px;
@@ -63,17 +65,23 @@
 }
 
 .typeTab:hover {
-  border-color: #555;
-  color: #fff;
-  background: #222;
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 .typeTabActive {
-  color: #fff !important;
+  color: var(--text-primary) !important;
   font-weight: 500;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+/* "全部"按钮激活状态 */
+.typeTabActiveAll {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--accent-primary) !important;
 }
 
 .typeIcon {
@@ -89,15 +97,16 @@
 .typeCount {
   font-size: 13px;
   font-weight: 700;
-  background: rgba(255,255,255,0.12);
+  background: var(--bg-hover);
   padding: 2px 8px;
   border-radius: 10px;
   min-width: 28px;
   text-align: center;
+  transition: background 0.3s;
 }
 
 .typeTabActive .typeCount {
-  background: rgba(255,255,255,0.25);
+  background: rgba(22, 119, 255, 0.2);
 }
 
 /* ========================================
@@ -106,12 +115,13 @@
 .statsSection {
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #161616;
+  background: var(--bg-secondary);
   border-radius: 10px;
-  border: 1px solid #222;
+  border: 1px solid var(--border-primary);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .statsLeft {
@@ -126,14 +136,16 @@
   gap: 4px;
   padding: 4px 12px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.04);
-  color: #888;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
   font-size: 13px;
+  transition: background 0.3s, color 0.3s;
 }
 
 .statChipValue {
   font-weight: 600;
-  color: #bbb;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 /* ========================================
@@ -148,13 +160,14 @@
 
 .searchInput {
   max-width: 400px;
-  background: #1e1e1e !important;
-  border-color: #333 !important;
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-primary) !important;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .searchInput input {
   background: transparent !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 /* ========================================
@@ -167,17 +180,17 @@
 }
 
 .projectCard {
-  background: #1e1e1e !important;
-  border: 1px solid #2a2a2a !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-primary) !important;
   border-radius: 12px !important;
   transition: all 0.2s;
   overflow: hidden;
 }
 
 .projectCard:hover {
-  border-color: #444 !important;
+  border-color: var(--accent-primary) !important;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .projectCard :global(.ant-card-body) {
@@ -189,18 +202,19 @@
 }
 
 .projectCard :global(.ant-card-actions) {
-  background: #161616 !important;
-  border-top: 1px solid #2a2a2a !important;
+  background: var(--bg-tertiary) !important;
+  border-top: 1px solid var(--border-primary) !important;
   border-radius: 0 0 12px 12px !important;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .projectCard :global(.ant-card-actions > li) {
-  color: #666 !important;
+  color: var(--text-tertiary) !important;
   transition: color 0.2s;
 }
 
 .projectCard :global(.ant-card-actions > li:hover) {
-  color: #4096ff !important;
+  color: var(--accent-primary) !important;
 }
 
 .cardHeader {
@@ -226,11 +240,12 @@
 .projectName {
   font-size: 15px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.3s;
 }
 
 .cardActions {
@@ -241,12 +256,12 @@
 }
 
 .silIcon {
-  color: #52c41a;
+  color: var(--accent-success);
   font-size: 14px;
 }
 
 .noSilIcon {
-  color: #faad14;
+  color: var(--accent-warning);
   font-size: 14px;
   cursor: pointer;
   transition: color 0.2s;
@@ -257,14 +272,14 @@
 }
 
 .deleteBtn {
-  color: #555;
+  color: var(--text-tertiary);
   cursor: pointer;
   font-size: 12px;
   transition: color 0.2s;
 }
 
 .deleteBtn:hover {
-  color: #ff4d4f;
+  color: var(--accent-error);
 }
 
 .projectMeta {
@@ -275,11 +290,12 @@
 }
 
 .description {
-  color: #888 !important;
+  color: var(--text-secondary) !important;
   font-size: 13px;
   margin-bottom: 12px !important;
   min-height: 40px;
   line-height: 1.5;
+  transition: color 0.3s;
 }
 
 .cardFooter {
@@ -287,23 +303,26 @@
   justify-content: space-between;
   align-items: center;
   padding-top: 10px;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--border-primary);
+  transition: border-color 0.3s;
 }
 
 .docCount {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 12px;
   display: flex;
   align-items: center;
   gap: 4px;
+  transition: color 0.3s;
 }
 
 .lastUpdate {
-  color: #666;
+  color: var(--text-tertiary);
   font-size: 11px;
   display: flex;
   align-items: center;
   gap: 4px;
+  transition: color 0.3s;
 }
 
 .cardTags {
@@ -318,8 +337,9 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #666;
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+  transition: background 0.3s, color 0.3s;
 }
 
 /* ========================================
@@ -334,7 +354,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 400px;
+  height: calc(100vh - 200px);
+  min-height: 300px;
 }
 
 /* ========================================
@@ -350,7 +371,8 @@
 
 .detailSection h4 {
   margin-bottom: 8px;
-  color: #e0e0e0;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 /* ========================================
@@ -363,13 +385,14 @@
   transform: translateX(-50%);
   max-width: 360px;
   min-width: 260px;
-  background: rgba(22, 27, 34, 0.95);
+  background: var(--bg-elevated);
   border-radius: 12px;
-  border: 1px solid #333;
+  border: 1px solid var(--border-primary);
   padding: 12px 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   z-index: 99999;
   animation: fadeIn 0.2s ease-out;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 @keyframes fadeIn {
@@ -382,16 +405,18 @@
   align-items: center;
   font-size: 13px;
   font-weight: 500;
-  color: #fff;
+  color: var(--text-primary);
   margin-bottom: 8px;
+  transition: color 0.3s;
 }
 
 .syncProgressBar {
   height: 4px;
-  background: #2a3f5f;
+  background: var(--bg-tertiary);
   border-radius: 2px;
   overflow: hidden;
   margin-bottom: 6px;
+  transition: background 0.3s;
 }
 
 .syncProgressFill {
@@ -403,16 +428,89 @@
 
 .syncProgressFile {
   font-size: 12px;
-  color: #8b949e;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.3s;
 }
 
 .syncProgressCount {
   font-size: 12px;
-  color: #58a6ff;
+  color: var(--accent-primary);
   text-align: right;
+}
+
+/* ========================================
+   Modal 内部区块样式
+   ======================================== */
+.modalInfoBox {
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  margin-bottom: 12px;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.modalTipBox {
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border: 1px solid var(--border-primary);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+/* ========================================
+   详情面板样式
+   ======================================== */
+.detailInfoCard {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: background 0.3s;
+}
+
+.detailLabel {
+  color: var(--text-tertiary);
+  transition: color 0.3s;
+}
+
+.detailSecondary {
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+/* ========================================
+   扫描结果列表样式
+   ======================================== */
+.scanResultBox {
+  max-height: 220px;
+  overflow: auto;
+  background: var(--bg-hover);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  transition: background 0.3s;
+}
+
+.scanResultEmpty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 16px;
+}
+
+.scanResultPath {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  margin-left: auto;
+  text-align: right;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ========================================

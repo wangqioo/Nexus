@@ -18,6 +18,7 @@ const { Title, Text } = Typography
 interface PendingProject {
   name: string
   path: string
+  projectType: string
   pendingCount: number
 }
 
@@ -30,7 +31,7 @@ export function Dashboard() {
   const [showGuide, setShowGuide] = useState(false)
   
   // 使用全局同步状态
-  const { syncing, startSync, updateProgress, endSync } = useSync()
+  const { syncing, startSync, updateProgress, updateBatchProgress, endSync, isCancelled } = useSync()
 
   useEffect(() => {
     loadData()
@@ -62,11 +63,12 @@ export function Dashboard() {
     const pending: PendingProject[] = []
     for (const project of projectList) {
       try {
-        const result = await window.electronAPI?.checkPendingSync(project.path)
+        const result = await window.electronAPI?.checkPendingSync(project.path, project.projectType)
         if (result?.hasPending) {
           pending.push({
             name: project.name,
             path: project.path,
+            projectType: project.projectType,
             pendingCount: result.pendingCount
           })
         }
@@ -94,41 +96,91 @@ export function Dashboard() {
       } catch {}
     }
 
-    startSync(`同步 ${pendingProjects[0]?.name || '项目'}`, pendingProjects.length)
     let synced = 0
     let errors = 0
 
     for (let i = 0; i < pendingProjects.length; i++) {
       const project = pendingProjects[i]
-      updateProgress({
-        step: `同步 ${project.name}`,
-        current: i,
-        total: pendingProjects.length,
-        file: `${project.pendingCount} 条待同步`
+      
+      // 第一个项目时才启动进度条
+      if (i === 0) {
+        startSync(`正在同步: ${project.name}`, pendingProjects.length, true)
+      }
+
+      // 检查是否被取消
+      if (isCancelled()) {
+        updateBatchProgress({
+          totalStep: `已取消 (完成 ${synced}/${pendingProjects.length})`,
+          totalCurrent: i,
+          totalCount: pendingProjects.length,
+          currentStep: '同步已终止',
+          currentFile: '',
+          currentProgress: 100
+        })
+        break
+      }
+      
+      // 更新双进度条
+      updateBatchProgress({
+        totalStep: `正在同步: ${project.name}`,
+        totalCurrent: i,
+        totalCount: pendingProjects.length,
+        currentStep: '连接中...',
+        currentFile: `共 ${project.pendingCount} 条文档`,
+        currentProgress: 0
       })
 
       try {
-        await window.electronAPI?.syncFromProject(project.path, apiKey)
+        await window.electronAPI?.syncFromProject(project.path, apiKey, project.projectType)
         synced++
+        
+        // 更新当前项目完成
+        updateBatchProgress({
+          totalStep: `✓ 完成: ${project.name}`,
+          totalCurrent: i + 1,
+          totalCount: pendingProjects.length,
+          currentStep: '同步成功',
+          currentFile: '',
+          currentProgress: 100
+        })
       } catch (e) {
         console.error(`同步 ${project.name} 失败:`, e)
         errors++
+        
+        updateBatchProgress({
+          totalStep: `✗ 失败: ${project.name}`,
+          totalCurrent: i + 1,
+          totalCount: pendingProjects.length,
+          currentStep: '同步失败',
+          currentFile: String(e),
+          currentProgress: 100
+        })
       }
 
       // API 限速
-      if (i < pendingProjects.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500))
+      if (i < pendingProjects.length - 1 && !isCancelled()) {
+        await new Promise(resolve => setTimeout(resolve, 300))
       }
     }
 
-    updateProgress({ step: '同步完成', current: pendingProjects.length, total: pendingProjects.length })
+    // 最终状态
+    if (!isCancelled()) {
+      updateBatchProgress({
+        totalStep: `🎉 全部完成！成功 ${synced} 个`,
+        totalCurrent: pendingProjects.length,
+        totalCount: pendingProjects.length,
+        currentStep: errors > 0 ? `${errors} 个失败` : '全部成功',
+        currentFile: '',
+        currentProgress: 100
+      })
+    }
     
-    setTimeout(() => {
+    setTimeout(async () => {
       endSync()
       message.success(`一键同步完成: 成功 ${synced} 个项目, 失败 ${errors} 个`)
-      // 刷新数据
-      loadData()
-    }, 1000)
+      // 刷新数据 - 确保重新检测待同步状态
+      await loadData()
+    }, 1500)
   }
 
   // 项目类型统计
@@ -234,7 +286,7 @@ export function Dashboard() {
         <Alert
           type="success"
           showIcon
-          icon={<SyncOutlined spin />}
+          icon={<SyncOutlined />}
           message={
             <span>
               <strong>{pendingProjects.length}</strong> 个项目有新经验待同步（共 {pendingProjects.reduce((sum, p) => sum + p.pendingCount, 0)} 条）

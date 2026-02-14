@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import { 
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
-  BookOutlined
+  BookOutlined, FolderOutlined
 } from '@ant-design/icons'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../../services/storage'
@@ -46,9 +46,6 @@ export function Knowledge() {
   useEffect(() => {
     const docId = searchParams.get('docId')
     if (docId && entries.length > 0 && !loading) {
-      console.log('[Knowledge] Looking for docId:', docId)
-      console.log('[Knowledge] Available entry IDs:', entries.slice(0, 10).map(e => e.id))
-      
       // 查找匹配的文档（多种匹配方式）
       const entry = entries.find(e => {
         if (!e.id) return false
@@ -62,11 +59,9 @@ export function Knowledge() {
       })
       
       if (entry) {
-        console.log('[Knowledge] Found entry:', entry.id)
         setDetailEntry(entry)
         setDrawerOpen(true)
       } else {
-        console.log('[Knowledge] Entry not found')
         message.info('未找到对应的知识条目，可能尚未同步')
       }
       // 清除 URL 参数
@@ -78,8 +73,6 @@ export function Knowledge() {
     setLoading(true)
     try {
       const data = await storage.listAllKnowledge()
-      console.log('[Knowledge] Loaded entries:', data.length)
-      console.log('[Knowledge] Types:', [...new Set(data.map(e => e.projectType))])
       setEntries(data)
     } catch (e) {
       console.error('Failed to load knowledge:', e)
@@ -297,8 +290,7 @@ export function Knowledge() {
         <div className={styles.sectionLabel}>项目类型</div>
         <div className={styles.typeTabs}>
           <div 
-            className={`${styles.typeTab} ${selectedType === 'all' ? styles.typeTabActive : ''}`}
-            style={selectedType === 'all' ? { background: '#333', borderColor: '#555' } : {}}
+            className={`${styles.typeTab} ${selectedType === 'all' ? `${styles.typeTabActive} ${styles.typeTabActiveAll}` : ''}`}
             onClick={() => { setSelectedType('all'); setSelectedCategory('all') }}
           >
             <span className={styles.typeIcon}>📋</span>
@@ -410,7 +402,7 @@ export function Knowledge() {
                       <span key={tag} className={styles.cardTag}>{tag}</span>
                     ))}
                     {(entry.tags?.length || 0) > 4 && (
-                      <span className={styles.cardTag}>+{entry.tags!.length - 4}</span>
+                      <span className={styles.cardTag}>+{(entry.tags?.length || 0) - 4}</span>
                     )}
                   </div>
                   <span className={styles.cardDate}>{formatDate(entry.updatedAt || '')}</span>
@@ -452,7 +444,6 @@ export function Knowledge() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={600}
-        styles={{ body: { background: '#141414' } }}
         extra={
           <div className={styles.actionButtons}>
             <Button 
@@ -485,7 +476,7 @@ export function Knowledge() {
               {detailEntry.severity && (
                 <Tag color={getSeverityColor(detailEntry.severity)}>{detailEntry.severity}</Tag>
               )}
-              {detailEntry.tags.map(tag => (
+              {(detailEntry.tags || []).map(tag => (
                 <Tag key={tag}>{tag}</Tag>
               ))}
             </div>
@@ -505,11 +496,21 @@ export function Knowledge() {
               </pre>
             </div>
             
+            {/* 所属项目标签 */}
+            {(detailEntry.projectName || detailEntry.projectPath) && (
+              <div className={styles.linkedProject}>
+                <FolderOutlined style={{ marginRight: 8, color: '#1677ff', fontSize: 15 }} />
+                <span style={{ color: '#888', fontSize: 12, marginRight: 8 }}>来自项目</span>
+                <Tag color="blue" style={{ fontSize: 14, padding: '4px 16px', fontWeight: 600, borderRadius: 6 }}>
+                  {detailEntry.projectName || detailEntry.projectPath?.split('/').pop() || '未知项目'}
+                </Tag>
+              </div>
+            )}
+            
             <div className={styles.detailMeta}>
               <Text type="secondary">
                 创建: {formatDate(detailEntry.createdAt)} | 
                 更新: {formatDate(detailEntry.updatedAt)}
-                {detailEntry.sourceProject && ` | 来源: ${detailEntry.sourceProject}`}
               </Text>
             </div>
           </>

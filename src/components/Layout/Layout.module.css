@@ -4,11 +4,12 @@
 }
 
 .sider {
-  border-right: 1px solid #1f1f1f;
+  border-right: 1px solid var(--border-primary);
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #0d0d0d !important;
+  background: var(--bg-secondary) !important;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .logo {
@@ -16,9 +17,10 @@
   display: flex;
   align-items: flex-end;
   padding: 0 16px 16px 16px;
-  border-bottom: 1px solid #1f1f1f;
+  border-bottom: 1px solid var(--border-primary);
   gap: 10px;
   -webkit-app-region: drag;
+  transition: border-color 0.3s;
 }
 
 .logoIcon {
@@ -38,15 +40,17 @@
 
 .logoText {
   margin: 0 !important;
-  color: #fff !important;
+  color: var(--text-primary) !important;
   font-weight: 600 !important;
   font-size: 16px !important;
   white-space: nowrap;
+  transition: color 0.3s;
 }
 
 .version {
   font-size: 10px;
-  color: #666;
+  color: var(--text-tertiary);
+  transition: color 0.3s;
 }
 
 .menu {
@@ -70,7 +74,8 @@
 
 .menu :global(.ant-menu-item-divider) {
   margin: 8px 16px !important;
-  background: #1f1f1f !important;
+  background: var(--border-primary) !important;
+  transition: background-color 0.3s;
 }
 
 .collapseBtn {
@@ -79,23 +84,24 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #666;
-  border-top: 1px solid #1f1f1f;
-  transition: color 0.2s;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border-primary);
+  transition: color 0.2s, border-color 0.3s;
 }
 
 .collapseBtn:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .header {
   height: 60px;
-  background: #0d0d0d !important;
-  border-bottom: 1px solid #1f1f1f;
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border-primary);
   padding: 0 !important;
   display: flex;
   align-items: center;
   position: relative;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .titlebarDrag {
@@ -109,21 +115,51 @@
 }
 
 .headerContent {
-  max-width: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 800px;
   margin: 0 auto;
   padding: 0 24px;
   position: relative;
   z-index: 1;
   -webkit-app-region: no-drag;
+  gap: 16px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.headerBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary, #8b949e);
+  transition: all 0.2s;
+}
+
+.headerBtn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #e6edf3);
 }
 
 .searchInput {
   width: 100%;
+  max-width: 360px;
   background: transparent !important;
-  border: 1px solid #333 !important;
+  border: 1px solid var(--border-primary) !important;
   border-radius: 8px !important;
   cursor: pointer !important;
   height: 36px;
+  transition: border-color 0.3s;
 }
 
 .searchInput input {
@@ -132,19 +168,21 @@
 }
 
 .searchInput:hover {
-  border-color: #444 !important;
+  border-color: var(--accent-primary) !important;
 }
 
 .shortcut {
   font-size: 11px;
-  color: #666;
-  background: #1f1f1f;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
   padding: 2px 6px;
   border-radius: 4px;
+  transition: background-color 0.3s, color 0.3s;
 }
 
 .content {
   padding: 24px;
   overflow: auto;
-  background: #0a0a0a;
+  background: var(--bg-primary);
+  transition: background-color 0.3s;
 }

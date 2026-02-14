@@ -13,7 +13,8 @@
 
 .title {
   margin: 0 0 4px 0 !important;
-  color: #fff !important;
+  color: var(--text-primary) !important;
+  transition: color 0.3s;
 }
 
 /* 项目类型统计卡片 */
@@ -27,8 +28,8 @@
 .typeCard {
   padding: 16px;
   border-radius: 12px;
-  border: 1px solid #2a2a2a;
-  background: #1a1a1a;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -37,9 +38,9 @@
 }
 
 .typeCard:hover {
-  border-color: #444;
+  border-color: var(--accent-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .typeCardIcon {
@@ -53,19 +54,22 @@
 
 .typeCardName {
   font-size: 13px;
-  color: #aaa;
+  color: var(--text-secondary);
   margin-bottom: 2px;
+  transition: color 0.3s;
 }
 
 .typeCardCount {
   font-size: 22px;
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .typeCardLabel {
   font-size: 11px;
-  color: #666;
+  color: var(--text-tertiary);
+  transition: color 0.3s;
 }
 
 /* 概览统计条 */
@@ -74,10 +78,11 @@
   gap: 24px;
   margin-bottom: 24px;
   padding: 16px 20px;
-  background: #1a1a1a;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--border-primary);
   flex-wrap: wrap;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .statItem {
@@ -89,12 +94,14 @@
 .statNumber {
   font-size: 24px;
   font-weight: 700;
-  color: #e0e0e0;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .statLabel {
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
+  transition: color 0.3s;
 }
 
 /* 最近活动 */
@@ -106,28 +113,31 @@
 }
 
 .listCard {
-  background: #1a1a1a !important;
-  border: 1px solid #2a2a2a !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-primary) !important;
   border-radius: 12px !important;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .listCard :global(.ant-card-head) {
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border-primary);
+  transition: border-color 0.3s;
 }
 
 .listCard :global(.ant-card-head-title) {
-  color: #e0e0e0;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .listItem {
   padding: 10px 0 !important;
-  border-bottom: 1px solid #222 !important;
+  border-bottom: 1px solid var(--border-secondary) !important;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .listItem:hover {
-  background: rgba(255,255,255,0.03);
+  background: var(--bg-hover);
 }
 
 .listItem:last-child {
@@ -148,7 +158,7 @@
 .unreadDot {
   width: 8px;
   height: 8px;
-  background: #1677ff;
+  background: var(--accent-primary);
   border-radius: 50%;
   flex-shrink: 0;
   animation: pulse 2s infinite;
@@ -164,15 +174,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .entryPreview {
   font-size: 12px;
   display: block;
-  color: #666;
+  color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.3s;
 }
 
 /* 欢迎 */
@@ -183,14 +196,20 @@
   border-radius: 12px !important;
 }
 
+[data-theme="light"] .welcomeCard {
+  background: linear-gradient(135deg, #e8f4ff 0%, #d6e9ff 100%) !important;
+  border: 1px solid #91caff !important;
+}
+
 .welcomeContent {
   text-align: center;
   padding: 24px 0;
 }
 
 .welcomeContent h4 {
-  color: #fff !important;
+  color: var(--text-primary) !important;
   margin-bottom: 8px !important;
+  transition: color 0.3s;
 }
 
 .quickActions {
@@ -209,15 +228,16 @@
   top: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
-  border-bottom: 2px solid #1677ff;
+  background: var(--bg-elevated);
+  border-bottom: 2px solid var(--accent-primary);
   padding: 12px 24px;
-  box-shadow: 0 4px 20px rgba(22, 119, 255, 0.3);
+  box-shadow: 0 4px 20px rgba(22, 119, 255, 0.2);
   z-index: 99999;
   display: flex;
   align-items: center;
   gap: 20px;
   animation: slideDown 0.3s ease-out;
+  transition: background 0.3s;
 }
 
 @keyframes slideDown {
@@ -236,18 +256,20 @@
   align-items: center;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   white-space: nowrap;
   min-width: 150px;
+  transition: color 0.3s;
 }
 
 .syncProgressTrack {
   flex: 1;
   height: 8px;
-  background: #2a3f5f;
+  background: var(--bg-tertiary);
   border-radius: 4px;
   overflow: hidden;
   min-width: 200px;
+  transition: background 0.3s;
 }
 
 .syncProgressFill {
@@ -266,13 +288,14 @@
 
 .syncProgressFile {
   font-size: 13px;
-  color: #8b949e;
+  color: var(--text-secondary);
   white-space: nowrap;
+  transition: color 0.3s;
 }
 
 .syncProgressCount {
   font-size: 14px;
   font-weight: 600;
-  color: #58a6ff;
+  color: var(--accent-primary);
   white-space: nowrap;
 }

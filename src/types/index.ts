@@ -30,6 +30,21 @@ export interface DocumentTemplate {
   aiPrompt: string                    // AI 生成时的 prompt 指导
 }
 
+// 模板版本历史记录
+export interface TemplateVersionRecord {
+  version: string           // 版本号，如 "1.0", "1.1"
+  timestamp: string         // ISO 时间戳
+  changes: string           // 变更说明
+}
+
+// 项目使用的模板版本记录
+export interface ProjectTemplateUsage {
+  projectPath: string       // 项目路径
+  projectName: string       // 项目名称
+  templateVersion: string   // 使用的模板版本
+  initializedAt: string     // 初始化时间
+}
+
 // 全局模板配置
 export interface NexusTemplateConfig {
   version: string
@@ -45,6 +60,9 @@ export interface NexusTemplateConfig {
     defaultTags: string[]        // 默认标签
     aiAnalysisEnabled: boolean   // 启用 AI 分析
   }
+  // 版本历史和项目使用记录
+  versionHistory?: TemplateVersionRecord[]     // 版本修改历史
+  projectUsages?: ProjectTemplateUsage[]       // 哪些项目使用了哪个版本
 }
 
 // 默认模板配置
@@ -350,8 +368,11 @@ export interface KnowledgeEntry {
   category: string                // 分类 ID (对应 KNOWLEDGE_CATEGORIES)
   tags: string[]
   severity?: 'critical' | 'major' | 'minor' | 'trivial'
-  // 来源
-  sourceProject?: string
+  // 来源项目关联（双向索引）
+  projectId?: string              // 关联的项目 ID
+  projectName?: string            // 关联的项目名称
+  projectPath?: string            // 关联的项目路径
+  sourceProject?: string          // 兼容旧字段
   sourceFile?: string
   // 元数据 (类型特定)
   metadata?: Record<string, any>
@@ -393,6 +414,10 @@ export interface ElectronAPI {
   projectPathExists: (filePath: string) => Promise<boolean>
   getProjectLastModified: (projectPath: string) => Promise<string | null>
   createProjectDir: (dirPath: string) => Promise<boolean>
+  verifyProjectPath: (project: { id: string, path: string, projectType?: string }) => 
+    Promise<{ valid: boolean, newPath?: string, reason?: string }>
+  verifyProjectPaths: (projects: Array<{ id: string, path: string, projectType?: string }>) => 
+    Promise<Record<string, { valid: boolean, newPath?: string, reason?: string }>>
   // Git 操作
   gitClone: (url: string, targetPath: string, branch?: string) => Promise<GitOperationResult>
   gitPull: (repoPath: string) => Promise<GitOperationResult>
@@ -400,6 +425,7 @@ export interface ElectronAPI {
   openInFinder: (path: string) => Promise<boolean>
   openInTerminal: (path: string) => Promise<boolean>
   openInCursor: (path: string) => Promise<boolean>
+  openExternal: (url: string) => Promise<boolean>
   // 项目目录管理
   moveToTypeDir: (sourcePath: string, projectType: string, projectName: string) => Promise<MoveProjectResult>
   getTypeDir: (projectType: string) => Promise<string>
@@ -412,9 +438,9 @@ export interface ElectronAPI {
   // .nexus 项目管理
   initSilProject: (projectPath: string, config: SilProjectConfig) => Promise<boolean>
   scanSilProject: (projectPath: string) => Promise<SilProjectData | null>
-  syncFromProject: (projectPath: string, apiKey?: string) => Promise<SilSyncResult>
+  syncFromProject: (projectPath: string, apiKey?: string, projectType?: string) => Promise<SilSyncResult>
   syncToProject: (projectPath: string, data: Partial<SilProjectData>) => Promise<boolean>
-  checkPendingSync: (projectPath: string) => Promise<PendingSyncResult>
+  checkPendingSync: (projectPath: string, projectType?: string) => Promise<PendingSyncResult>
   reverseSyncToProjects: () => Promise<{ success: boolean; synced: number; skipped: number; errors: string[] }>
   clearKnowledgeBase: () => Promise<{ success: boolean; deleted: number; error?: string }>
   // 同步进度监听
@@ -442,6 +468,7 @@ export interface PendingSyncResult {
 
 // .nexus 项目配置 (project.yaml)
 export interface SilProjectConfig {
+  id?: string                     // 项目唯一标识（用于路径变化检测）
   name: string                    // 项目名称
   description?: string            // 项目描述
   chip?: string                   // 芯片型号
@@ -904,9 +931,16 @@ export interface Note {
   peripheralIds?: string[]
   projectId?: string
   
+  // 项目关联（双向索引）
+  projectName?: string            // 关联的项目名称
+  projectPath?: string            // 关联的项目路径
+  sourceProject?: string          // 兼容旧字段
+  
   tags: string[]
   createdAt: string
   updatedAt: string
+  
+  isNew?: boolean                 // 是否为新同步的文档（未读）
 }
 
 // ============================================================

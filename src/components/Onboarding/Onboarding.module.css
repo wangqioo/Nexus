@@ -5,6 +5,11 @@
   background: linear-gradient(145deg, #1a1a2e 0%, #0f0f1a 100%);
 }
 
+/* 白色主题下的渐变背景 */
+:global([data-theme="light"]) .modal :global(.ant-modal-content) {
+  background: linear-gradient(145deg, #e8f4ff 0%, #dbeafe 100%);
+}
+
 .container {
   padding: 40px 32px;
   text-align: center;
@@ -31,6 +36,10 @@
   border: 2px solid transparent;
 }
 
+:global([data-theme="light"]) .step {
+  background: #c7d2fe;
+}
+
 .step:hover {
   transform: scale(1.1);
 }
@@ -46,8 +55,21 @@
   background: #3a3a5e;
 }
 
+:global([data-theme="light"]) .step.done {
+  background: #a5b4fc;
+}
+
 .stepIcon {
   font-size: 22px;
+  color: #fff;
+}
+
+:global([data-theme="light"]) .stepIcon {
+  color: #4338ca;
+}
+
+:global([data-theme="light"]) .step.active .stepIcon {
+  color: #fff;
 }
 
 .line {
@@ -56,6 +78,10 @@
   background: #2a2a3e;
   margin: 0 4px;
   transition: background 0.3s ease;
+}
+
+:global([data-theme="light"]) .line {
+  background: #c7d2fe;
 }
 
 .line.lineDone {
@@ -80,9 +106,17 @@
   margin-bottom: 8px;
 }
 
+:global([data-theme="light"]) .title {
+  color: #1e293b;
+}
+
 .subtitle {
   font-size: 16px;
   color: rgba(255, 255, 255, 0.6);
+}
+
+:global([data-theme="light"]) .subtitle {
+  color: #64748b;
 }
 
 /* 底部 */
@@ -96,6 +130,14 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
+:global([data-theme="light"]) .skip {
+  color: #94a3b8;
+}
+
 .skip:hover {
   color: rgba(255, 255, 255, 0.7);
+}
+
+:global([data-theme="light"]) .skip:hover {
+  color: #475569;
 }

@@ -1,17 +1,20 @@
 .modal :global(.ant-modal-content) {
   border-radius: 12px !important;
   overflow: hidden;
-  background: #141414 !important;
+  background: var(--bg-secondary) !important;
+  transition: background 0.3s;
 }
 
 .searchContainer {
   padding: 12px 16px;
-  border-bottom: 1px solid #262626;
+  border-bottom: 1px solid var(--border-primary);
+  transition: border-color 0.3s;
 }
 
 .searchIcon {
-  color: #666;
+  color: var(--text-tertiary);
   font-size: 18px;
+  transition: color 0.3s;
 }
 
 .searchInput {
@@ -20,6 +23,7 @@
 
 .searchInput input {
   font-size: 16px;
+  color: var(--text-primary) !important;
 }
 
 .results {
@@ -31,7 +35,7 @@
   padding: 12px 16px !important;
   cursor: pointer;
   transition: background 0.2s;
-  border-bottom: 1px solid #1f1f1f !important;
+  border-bottom: 1px solid var(--border-secondary) !important;
 }
 
 .resultItem:last-child {
@@ -39,7 +43,7 @@
 }
 
 .resultItem:hover {
-  background: #1f1f1f;
+  background: var(--bg-hover);
 }
 
 .resultContent {
@@ -54,12 +58,15 @@
 }
 
 .resultTitle {
-  color: #fff !important;
+  color: var(--text-primary) !important;
   flex: 1;
+  transition: color 0.3s;
 }
 
 .resultSubtitle {
   font-size: 12px;
+  color: var(--text-secondary);
+  transition: color 0.3s;
 }
 
 .resultPreview {
@@ -69,6 +76,8 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.5;
+  color: var(--text-secondary);
+  transition: color 0.3s;
 }
 
 .empty {

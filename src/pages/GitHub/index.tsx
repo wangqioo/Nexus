@@ -204,7 +204,7 @@ export function GitHub() {
 
   const handleOpenGitHub = (repo: GitHubRepo) => {
     const webUrl = repo.url.replace('.git', '').replace('git@github.com:', 'https://github.com/')
-    window.open(webUrl, '_blank')
+    window.electronAPI.openExternal(webUrl)
   }
 
   const handleRefreshAll = async () => {
@@ -696,7 +696,7 @@ export function GitHub() {
                 size="small"
               />
               <Text type="secondary" className={styles.apiKeyTip}>
-                获取: <a href="https://open.bigmodel.cn" target="_blank" rel="noreferrer">open.bigmodel.cn</a>
+                获取: <a href="#" onClick={(e) => { e.preventDefault(); window.electronAPI.openExternal('https://open.bigmodel.cn') }}>open.bigmodel.cn</a>
               </Text>
             </div>
           )}

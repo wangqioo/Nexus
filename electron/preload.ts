@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
   getDataDir: () => ipcRenderer.invoke('fs:getDataDir'),
   
+  // 模板配置管理
+  getTemplateConfig: () => ipcRenderer.invoke('template:get'),
+  updateTemplateConfig: (config: any) => ipcRenderer.invoke('template:update', config),
+  resetTemplateConfig: () => ipcRenderer.invoke('template:reset'),
+  
   // 项目导入 (绝对路径)
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
   analyzeProject: (path: string) => ipcRenderer.invoke('project:analyze', path),
@@ -20,6 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   projectPathExists: (path: string) => ipcRenderer.invoke('project:exists', path),
   getProjectLastModified: (path: string) => ipcRenderer.invoke('project:getLastModified', path),
   createProjectDir: (path: string) => ipcRenderer.invoke('project:createDir', path),
+  verifyProjectPath: (project: { id: string, path: string, projectType?: string }) => 
+    ipcRenderer.invoke('project:verifyPath', project),
+  verifyProjectPaths: (projects: Array<{ id: string, path: string, projectType?: string }>) => 
+    ipcRenderer.invoke('project:verifyPaths', projects),
   
   // Git 操作
   gitClone: (url: string, targetPath: string, branch?: string) => 
@@ -41,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openInFinder: (path: string) => ipcRenderer.invoke('shell:openInFinder', path),
   openInTerminal: (path: string) => ipcRenderer.invoke('shell:openInTerminal', path),
   openInCursor: (path: string) => ipcRenderer.invoke('shell:openInCursor', path),
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   
   // 项目目录管理
   moveToTypeDir: (sourcePath: string, projectType: string, projectName: string) =>
@@ -53,12 +63,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('sil:init', projectPath, config),
   scanSilProject: (projectPath: string) => 
     ipcRenderer.invoke('sil:scan', projectPath),
-  syncFromProject: (projectPath: string, apiKey?: string) => 
-    ipcRenderer.invoke('sil:syncFrom', projectPath, apiKey),
+  syncFromProject: (projectPath: string, apiKey?: string, projectType?: string) => 
+    ipcRenderer.invoke('sil:syncFrom', projectPath, apiKey, projectType),
   syncToProject: (projectPath: string, data: any) => 
     ipcRenderer.invoke('sil:syncTo', projectPath, data),
-  checkPendingSync: (projectPath: string) =>
-    ipcRenderer.invoke('sil:checkPending', projectPath),
+  checkPendingSync: (projectPath: string, projectType?: string) =>
+    ipcRenderer.invoke('sil:checkPending', projectPath, projectType),
   reverseSyncToProjects: () =>
     ipcRenderer.invoke('sil:reverseSync'),
   clearKnowledgeBase: () =>

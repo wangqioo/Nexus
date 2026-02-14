@@ -13,7 +13,8 @@
 
 .title {
   margin: 0 !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
+  transition: color 0.3s;
 }
 
 /* ========================================
@@ -22,16 +23,17 @@
 .sectionLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 10px;
   padding-left: 2px;
+  transition: color 0.3s;
 }
 
 .sectionLabelSub {
   font-weight: 400;
-  color: #555;
+  color: var(--text-tertiary);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -55,9 +57,9 @@
   gap: 8px;
   padding: 10px 18px;
   border-radius: 12px;
-  border: 1px solid #333;
-  background: #1a1a1a;
-  color: #aaa;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   font-size: 14px;
@@ -65,17 +67,23 @@
 }
 
 .typeTab:hover {
-  border-color: #555;
-  color: #fff;
-  background: #222;
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 .typeTabActive {
-  color: #fff !important;
+  color: var(--text-primary) !important;
   font-weight: 500;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+/* "全部"按钮激活状态 */
+.typeTabActiveAll {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--accent-primary) !important;
 }
 
 .typeIcon {
@@ -91,15 +99,16 @@
 .typeCount {
   font-size: 13px;
   font-weight: 700;
-  background: rgba(255,255,255,0.12);
+  background: var(--bg-hover);
   padding: 2px 8px;
   border-radius: 10px;
   min-width: 28px;
   text-align: center;
+  transition: background 0.3s;
 }
 
 .typeTabActive .typeCount {
-  background: rgba(255,255,255,0.25);
+  background: rgba(22, 119, 255, 0.2);
 }
 
 /* ========================================
@@ -108,9 +117,10 @@
 .categorySection {
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #161616;
+  background: var(--bg-secondary);
   border-radius: 10px;
-  border: 1px solid #222;
+  border: 1px solid var(--border-primary);
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .categoryBar {
@@ -127,8 +137,8 @@
   padding: 4px 12px;
   border-radius: 16px;
   border: 1px solid transparent;
-  background: rgba(255,255,255,0.04);
-  color: #888;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
   font-size: 13px;
@@ -136,14 +146,14 @@
 }
 
 .categoryTag:hover {
-  background: rgba(255,255,255,0.08);
-  color: #ccc;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .categoryTagActive {
   background: rgba(22, 119, 255, 0.15) !important;
   border-color: rgba(22, 119, 255, 0.4) !important;
-  color: #4096ff !important;
+  color: var(--accent-primary) !important;
   font-weight: 500;
 }
 
@@ -165,13 +175,14 @@
 
 .searchInput {
   max-width: 400px;
-  background: #1e1e1e !important;
-  border-color: #333 !important;
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-primary) !important;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .searchInput input {
   background: transparent !important;
-  color: #e0e0e0 !important;
+  color: var(--text-primary) !important;
 }
 
 /* ========================================
@@ -184,8 +195,8 @@
 }
 
 .knowledgeCard {
-  background: #1e1e1e !important;
-  border: 1px solid #2a2a2a !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-primary) !important;
   border-radius: 12px !important;
   cursor: pointer;
   transition: all 0.2s;
@@ -193,9 +204,9 @@
 }
 
 .knowledgeCard:hover {
-  border-color: #444 !important;
+  border-color: var(--accent-primary) !important;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .cardHeader {
@@ -208,12 +219,13 @@
 .cardTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-primary);
   margin: 0;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.3s;
 }
 
 .cardBadges {
@@ -235,13 +247,14 @@
   font-size: 11px;
   padding: 1px 8px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #aaa;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  transition: background 0.3s, color 0.3s;
 }
 
 .cardContent {
   font-size: 13px;
-  color: #888;
+  color: var(--text-secondary);
   line-height: 1.5;
   overflow: hidden;
   display: -webkit-box;
@@ -249,6 +262,7 @@
   -webkit-box-orient: vertical;
   margin-bottom: 12px;
   min-height: 58px;
+  transition: color 0.3s;
 }
 
 .cardFooter {
@@ -269,14 +283,16 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #777;
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+  transition: background 0.3s, color 0.3s;
 }
 
 .cardDate {
   font-size: 11px;
-  color: #555;
+  color: var(--text-tertiary);
   flex-shrink: 0;
+  transition: color 0.3s;
 }
 
 /* ========================================
@@ -292,28 +308,32 @@
 
 .detailContent {
   line-height: 1.8;
-  color: #ddd;
+  color: var(--text-primary);
+  transition: color 0.3s;
 }
 
 .detailContent pre {
-  background: #1a1a1a;
-  border: 1px solid #333;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
   padding: 12px;
   overflow-x: auto;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .detailContent code {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
+  transition: background 0.3s;
 }
 
 .detailMeta {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-primary);
+  transition: border-color 0.3s;
 }
 
 /* ========================================
@@ -349,8 +369,8 @@
   border-radius: 50%;
   display: inline-block;
   margin-right: 6px;
-  background: #1677ff;
-  box-shadow: 0 0 6px #1677ff;
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
   animation: pulse 2s infinite;
 }
 
@@ -362,4 +382,26 @@
 .actionButtons {
   display: flex;
   gap: 8px;
+}
+
+/* ========================================
+   关联项目（双向索引）
+   ======================================== */
+.linkedProject {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: rgba(22, 119, 255, 0.1);
+  border: 1px solid rgba(22, 119, 255, 0.3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.linkedProject :global(.ant-btn-link) {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.linkedProject :global(.ant-btn-link):hover {
+  color: #4096ff;
 }

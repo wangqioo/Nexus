@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
-  FileTextOutlined
+  FileTextOutlined, FolderOutlined
 } from '@ant-design/icons'
 import { v4 as uuidv4 } from 'uuid'
 import ReactMarkdown from 'react-markdown'
@@ -56,9 +56,6 @@ export function Notes() {
   useEffect(() => {
     const docId = searchParams.get('docId')
     if (docId && notes.length > 0 && !loading) {
-      console.log('[Notes] Looking for docId:', docId)
-      console.log('[Notes] Available note IDs:', notes.map(n => n.id))
-      
       // 查找匹配的笔记（多种匹配方式）
       const note = notes.find(n => {
         if (!n.id) return false
@@ -72,11 +69,9 @@ export function Notes() {
       })
       
       if (note) {
-        console.log('[Notes] Found note:', note.id)
         setDetailNote(note)
         setDrawerOpen(true)
       } else {
-        console.log('[Notes] Note not found')
         message.info('未找到对应的笔记，可能尚未同步')
       }
       // 清除 URL 参数
@@ -116,7 +111,7 @@ export function Notes() {
       filtered = filtered.filter(n =>
         n.title.toLowerCase().includes(q) ||
         n.content.toLowerCase().includes(q) ||
-        n.tags.some(t => t.toLowerCase().includes(q))
+        (n.tags || []).some(t => t.toLowerCase().includes(q))
       )
     }
     return filtered
@@ -208,9 +203,17 @@ export function Notes() {
   }
 
   // 查看详情
-  const handleViewDetail = (note: Note) => {
+  const handleViewDetail = async (note: Note) => {
     setDetailNote(note)
     setDrawerOpen(true)
+    
+    // 标记为已读
+    if (note.isNew) {
+      const updatedNote = { ...note, isNew: false }
+      await storage.saveNote(updatedNote)
+      // 更新本地状态
+      setNotes(prev => prev.map(n => n.id === note.id ? updatedNote : n))
+    }
   }
 
   return (
@@ -231,8 +234,7 @@ export function Notes() {
         <div className={styles.sectionLabel}>笔记分类</div>
         <div className={styles.typeTabs}>
           <div
-            className={`${styles.typeTab} ${selectedCategory === 'all' ? styles.typeTabActive : ''}`}
-            style={selectedCategory === 'all' ? { background: '#333', borderColor: '#555' } : {}}
+            className={`${styles.typeTab} ${selectedCategory === 'all' ? `${styles.typeTabActive} ${styles.typeTabActiveAll}` : ''}`}
             onClick={() => setSelectedCategory('all')}
           >
             <span className={styles.typeIcon}>📋</span>
@@ -289,7 +291,10 @@ export function Notes() {
                 onClick={() => handleViewDetail(note)}
               >
                 <div className={styles.cardHeader}>
-                  <div className={styles.cardTitle}>{note.title}</div>
+                  <div className={styles.cardTitle}>
+                    {note.isNew && <span className={styles.unreadDot} title="未读" />}
+                    {note.title}
+                  </div>
                   <div className={styles.cardBadges}>
                     <span
                       className={styles.categoryBadge}
@@ -306,11 +311,11 @@ export function Notes() {
 
                 <div className={styles.cardFooter}>
                   <div className={styles.cardTags}>
-                    {note.tags.slice(0, 4).map(tag => (
+                    {(note.tags || []).slice(0, 4).map(tag => (
                       <span key={tag} className={styles.cardTag}>{tag}</span>
                     ))}
-                    {note.tags.length > 4 && (
-                      <span className={styles.cardTag}>+{note.tags.length - 4}</span>
+                    {(note.tags?.length || 0) > 4 && (
+                      <span className={styles.cardTag}>+{(note.tags?.length || 0) - 4}</span>
                     )}
                   </div>
                   <span className={styles.cardDate}>{formatDate(note.updatedAt)}</span>
@@ -347,7 +352,6 @@ export function Notes() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={640}
-        styles={{ body: { background: '#141414' } }}
         extra={
           <div className={styles.actionButtons}>
             <Button
@@ -378,7 +382,7 @@ export function Notes() {
                   <Tag color={color}>{catInfo.icon} {catInfo.name}</Tag>
                 ) : null
               })()}
-              {detailNote.tags.map(tag => (
+              {(detailNote.tags || []).map(tag => (
                 <Tag key={tag}>{tag}</Tag>
               ))}
             </div>
@@ -388,6 +392,17 @@ export function Notes() {
                 {detailNote.content}
               </ReactMarkdown>
             </div>
+
+            {/* 所属项目标签 */}
+            {(detailNote.projectName || detailNote.projectPath) && (
+              <div className={styles.linkedProject}>
+                <FolderOutlined style={{ marginRight: 8, color: '#1677ff', fontSize: 15 }} />
+                <span style={{ color: '#888', fontSize: 12, marginRight: 8 }}>来自项目</span>
+                <Tag color="blue" style={{ fontSize: 14, padding: '4px 16px', fontWeight: 600, borderRadius: 6 }}>
+                  {detailNote.projectName || detailNote.projectPath?.split('/').pop() || '未知项目'}
+                </Tag>
+              </div>
+            )}
 
             <div className={styles.detailMeta}>
               <Text type="secondary">

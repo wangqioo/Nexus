@@ -12,6 +12,322 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 // 数据存储目录
 const DATA_DIR = path.join(os.homedir(), '.nexus')
 
+// ============================================================
+// 模板配置管理
+// ============================================================
+
+const TEMPLATE_CONFIG_FILE = path.join(DATA_DIR, 'templates.json')
+
+// 默认模板配置（与 types/index.ts 中的 DEFAULT_TEMPLATE_CONFIG 保持一致）
+const DEFAULT_TEMPLATE_CONFIG = {
+  version: '1.0',
+  templates: {
+    debug: {
+      id: 'debug',
+      name: '调试经验',
+      icon: 'BugOutlined',
+      description: '记录 bug 修复过程和问题排查经验',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '问题简述' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'severity', label: '严重程度', type: 'select', required: false, options: ['critical', 'major', 'minor', 'trivial'], default: 'minor' },
+        { name: 'status', label: '状态', type: 'select', required: false, options: ['resolved', 'workaround', 'investigating'], default: 'resolved' },
+        { name: 'platform', label: '平台', type: 'text', required: false, placeholder: '如 ESP32-S3' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 问题描述
+<!-- 描述遇到的问题现象 -->
+
+## 错误信息
+\`\`\`
+<!-- 粘贴错误日志 -->
+\`\`\`
+
+## 根因分析
+<!-- 分析问题的根本原因 -->
+
+## 解决方案
+<!-- 详细描述解决步骤 -->
+
+## 相关代码
+\`\`\`c
+// 修复后的代码
+\`\`\`
+
+## 经验总结
+<!-- 这次问题带来的教训或经验 -->
+`,
+      aiPrompt: `请帮我记录这个调试经验。要求：
+1. 标题简洁明了，概括问题本质
+2. 问题描述要包含复现条件
+3. 根因分析要深入，不只是表面现象
+4. 解决方案要具体可操作
+5. 如果有代码修改，请包含关键代码片段
+6. 总结要提炼出可复用的经验`,
+    },
+    snippet: {
+      id: 'snippet',
+      name: '代码片段',
+      icon: 'CodeOutlined',
+      description: '保存可复用的代码模板',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '代码片段名称' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'language', label: '编程语言', type: 'select', required: true, options: ['c', 'cpp', 'python', 'javascript', 'typescript', 'rust', 'go', 'shell', 'other'], default: 'c' },
+        { name: 'category', label: '分类', type: 'select', required: false, options: ['driver', 'algorithm', 'utility', 'config', 'template', 'other'], default: 'utility' },
+        { name: 'platform', label: '适用平台', type: 'text', required: false, placeholder: '如 ESP-IDF, Arduino' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 功能说明
+<!-- 这段代码的作用 -->
+
+## 代码
+\`\`\`c
+// 代码内容
+\`\`\`
+
+## 使用方法
+<!-- 如何使用这段代码 -->
+
+## 依赖说明
+<!-- 需要的头文件、库等 -->
+
+## 注意事项
+<!-- 使用时需要注意的点 -->
+`,
+      aiPrompt: `请帮我保存这个代码片段。要求：
+1. 标题要清晰表达代码功能
+2. 功能说明简洁但完整
+3. 代码要有适当的注释
+4. 说明使用方法和参数
+5. 列出依赖的库或头文件
+6. 提醒使用时的注意事项`,
+    },
+    note: {
+      id: 'note',
+      name: '开发笔记',
+      icon: 'FileTextOutlined',
+      description: '记录学习心得和技术要点',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '笔记标题' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'category', label: '分类', type: 'select', required: false, options: ['learning', 'design', 'issue', 'summary', 'reference'], default: 'learning' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 背景
+<!-- 为什么要记录这个 -->
+
+## 核心内容
+<!-- 主要知识点 -->
+
+## 示例
+<!-- 代码示例或实际案例 -->
+
+## 参考资料
+<!-- 相关链接或文档 -->
+`,
+      aiPrompt: `请帮我记录这个开发笔记。要求：
+1. 标题要能概括核心内容
+2. 说明记录的背景和目的
+3. 核心内容要条理清晰
+4. 如果有代码，请包含示例
+5. 附上相关的参考资料链接`,
+    },
+    config: {
+      id: 'config',
+      name: '配置模板',
+      icon: 'SettingOutlined',
+      description: '保存重要的配置文件',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '配置名称' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'configType', label: '配置类型', type: 'select', required: false, options: ['build', 'env', 'device', 'network', 'other'], default: 'other' },
+        { name: 'platform', label: '适用平台', type: 'text', required: false, placeholder: '如 ESP-IDF 5.x' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 配置说明
+<!-- 这个配置的作用 -->
+
+## 配置内容
+\`\`\`
+# 配置文件内容
+\`\`\`
+
+## 关键参数说明
+<!-- 重要参数的含义 -->
+
+## 使用场景
+<!-- 什么情况下使用这个配置 -->
+`,
+      aiPrompt: `请帮我保存这个配置模板。要求：
+1. 标题要清晰表达配置用途
+2. 说明配置的作用和适用场景
+3. 保留完整的配置内容
+4. 解释关键参数的含义
+5. 说明使用时需要修改的地方`,
+    },
+  },
+  settings: {
+    autoAddTimestamp: true,
+    defaultTags: [],
+    aiAnalysisEnabled: true,
+  },
+}
+
+// 读取模板配置
+function loadTemplateConfig(): typeof DEFAULT_TEMPLATE_CONFIG {
+  try {
+    if (fs.existsSync(TEMPLATE_CONFIG_FILE)) {
+      const content = fs.readFileSync(TEMPLATE_CONFIG_FILE, 'utf-8')
+      const config = JSON.parse(content)
+      // 合并默认配置，确保新字段存在
+      return {
+        ...DEFAULT_TEMPLATE_CONFIG,
+        ...config,
+        templates: {
+          ...DEFAULT_TEMPLATE_CONFIG.templates,
+          ...(config.templates || {}),
+        },
+        settings: {
+          ...DEFAULT_TEMPLATE_CONFIG.settings,
+          ...(config.settings || {}),
+        },
+      }
+    }
+  } catch (e) {
+    console.error('[Nexus] 读取模板配置失败:', e)
+  }
+  return { ...DEFAULT_TEMPLATE_CONFIG }
+}
+
+// 递增版本号
+function incrementVersion(version: string): string {
+  const parts = version.split('.')
+  const minor = parseInt(parts[1] || '0', 10) + 1
+  return `${parts[0]}.${minor}`
+}
+
+// 检测模板内容是否有变化（忽略版本历史和项目使用记录）
+function hasTemplateChanged(oldConfig: any, newConfig: any): boolean {
+  const compareObj = (a: any, b: any, keys: string[]): boolean => {
+    for (const key of keys) {
+      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) {
+        return true
+      }
+    }
+    return false
+  }
+  return compareObj(oldConfig, newConfig, ['templates', 'settings'])
+}
+
+// 生成变更说明
+function generateChangesSummary(oldConfig: any, newConfig: any): string {
+  const changes: string[] = []
+  
+  // 检查每个模板的变化
+  const templateNames: Record<string, string> = {
+    debug: '调试经验',
+    snippet: '代码片段',
+    note: '开发笔记',
+    config: '配置备份'
+  }
+  
+  for (const [id, name] of Object.entries(templateNames)) {
+    const oldT = oldConfig.templates?.[id]
+    const newT = newConfig.templates?.[id]
+    if (JSON.stringify(oldT) !== JSON.stringify(newT)) {
+      changes.push(`修改了「${name}」模板`)
+    }
+  }
+  
+  // 检查通用设置
+  if (JSON.stringify(oldConfig.settings) !== JSON.stringify(newConfig.settings)) {
+    changes.push('修改了通用设置')
+  }
+  
+  return changes.length > 0 ? changes.join('；') : '配置更新'
+}
+
+// 保存模板配置（带版本历史记录）
+function saveTemplateConfig(config: Partial<typeof DEFAULT_TEMPLATE_CONFIG>): boolean {
+  try {
+    const current = loadTemplateConfig()
+    
+    // 合并配置
+    let newConfig = {
+      ...current,
+      ...config,
+      templates: config.templates ? { ...current.templates, ...config.templates } : current.templates,
+      settings: config.settings ? { ...current.settings, ...config.settings } : current.settings,
+      versionHistory: current.versionHistory || [],
+      projectUsages: current.projectUsages || [],
+    }
+    
+    // 检测是否有实质性变化
+    if (hasTemplateChanged(current, newConfig)) {
+      // 递增版本号
+      const newVersion = incrementVersion(current.version || '1.0')
+      const changesSummary = generateChangesSummary(current, newConfig)
+      
+      // 记录版本历史
+      const versionRecord = {
+        version: newVersion,
+        timestamp: new Date().toISOString(),
+        changes: changesSummary
+      }
+      
+      newConfig.version = newVersion
+      newConfig.versionHistory = [...(newConfig.versionHistory || []), versionRecord]
+      
+      console.log(`[Nexus] 模板配置版本升级: ${current.version} -> ${newVersion}`)
+    }
+    
+    fs.writeFileSync(TEMPLATE_CONFIG_FILE, JSON.stringify(newConfig, null, 2), 'utf-8')
+    console.log('[Nexus] 模板配置已更新')
+    return true
+  } catch (e) {
+    console.error('[Nexus] 保存模板配置失败:', e)
+    return false
+  }
+}
+
+// 记录项目使用的模板版本
+function recordProjectTemplateUsage(projectPath: string, projectName: string, templateVersion: string): void {
+  try {
+    const config = loadTemplateConfig()
+    const usages = config.projectUsages || []
+    
+    // 检查是否已存在该项目的记录
+    const existingIndex = usages.findIndex((u: any) => u.projectPath === projectPath)
+    
+    const usage = {
+      projectPath,
+      projectName,
+      templateVersion,
+      initializedAt: new Date().toISOString()
+    }
+    
+    if (existingIndex >= 0) {
+      // 更新现有记录
+      usages[existingIndex] = usage
+    } else {
+      // 添加新记录
+      usages.push(usage)
+    }
+    
+    // 直接写入文件（不触发版本递增）
+    const newConfig = { ...config, projectUsages: usages }
+    fs.writeFileSync(TEMPLATE_CONFIG_FILE, JSON.stringify(newConfig, null, 2), 'utf-8')
+    console.log(`[Nexus] 记录项目模板使用: ${projectName} -> v${templateVersion}`)
+  } catch (e) {
+    console.error('[Nexus] 记录项目模板使用失败:', e)
+  }
+}
+
 // 确保数据目录存在 (v5 知识库目录结构)
 function ensureDataDirs() {
   const dirs = [
@@ -304,6 +620,14 @@ function createWindow() {
     backgroundColor: '#0a0a0a'
   })
 
+  // 阻止外部链接在 Electron 内打开新窗口，改为系统浏览器
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools()  // 调试
@@ -376,6 +700,30 @@ ipcMain.handle('fs:getDataDir', async () => {
   return DATA_DIR
 })
 
+// ============================================================
+// 模板配置 IPC
+// ============================================================
+
+ipcMain.handle('template:get', async () => {
+  return loadTemplateConfig()
+})
+
+ipcMain.handle('template:update', async (_, config: any) => {
+  return saveTemplateConfig(config)
+})
+
+ipcMain.handle('template:reset', async () => {
+  // 删除配置文件，返回默认配置
+  try {
+    if (fs.existsSync(TEMPLATE_CONFIG_FILE)) {
+      fs.unlinkSync(TEMPLATE_CONFIG_FILE)
+    }
+  } catch (e) {
+    console.error('[Nexus] 删除模板配置失败:', e)
+  }
+  return { ...DEFAULT_TEMPLATE_CONFIG }
+})
+
 
 // 读取 Markdown 文件并解析 frontmatter
 ipcMain.handle('fs:readMarkdown', async (_, filePath: string) => {
@@ -403,7 +751,7 @@ ipcMain.handle('fs:readMarkdown', async (_, filePath: string) => {
 ipcMain.handle('dialog:selectFolder', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
-    title: '选择 MCU 项目文件夹'
+    title: '选择项目文件夹'
   })
   if (!result.canceled && result.filePaths.length > 0) {
     return result.filePaths[0]
@@ -483,6 +831,150 @@ ipcMain.handle('project:getLastModified', async (_, projectPath: string) => {
   } catch {
     return null
   }
+})
+
+// 验证项目路径并尝试修复路径变化
+// 返回: { valid: true } 或 { valid: false, newPath?: string, reason: string }
+ipcMain.handle('project:verifyPath', async (_, project: { id: string, path: string, projectType?: string }) => {
+  try {
+    // 1. 检查原路径是否存在
+    if (fs.existsSync(project.path)) {
+      return { valid: true }
+    }
+    
+    // 2. 路径不存在，尝试通过 ID 在可能的目录中查找
+    const searchDirs: string[] = []
+    
+    // 根据项目类型确定搜索目录
+    const typeBaseDirs: Record<string, string[]> = {
+      mcu: ['/Users/wq/Workshop/MCU', '/Users/wq/flickering_candlelight', '/Users/wq/esp32_c5_imu'],
+      ai: ['/Users/wq/Workshop/AI'],
+      software: ['/Users/wq/Workshop/Software', '/Users/wq'],
+      linux: ['/Users/wq/Workshop/Linux', '/Users/wq/linux'],
+      other: ['/Users/wq/Workshop', '/Users/wq'],
+    }
+    
+    // 添加项目类型对应的目录
+    const baseDirs = typeBaseDirs[project.projectType || 'other'] || typeBaseDirs.other
+    searchDirs.push(...baseDirs)
+    
+    // 也搜索原路径的父目录（可能只是重命名）
+    const originalParent = path.dirname(project.path)
+    if (fs.existsSync(originalParent) && !searchDirs.includes(originalParent)) {
+      searchDirs.unshift(originalParent)
+    }
+    
+    // 3. 在搜索目录中查找带有 .nexus/project.yaml 且 ID 匹配的项目
+    for (const baseDir of searchDirs) {
+      if (!fs.existsSync(baseDir)) continue
+      
+      try {
+        const entries = fs.readdirSync(baseDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue
+          
+          const candidatePath = path.join(baseDir, entry.name)
+          const projectYamlPath = path.join(candidatePath, '.nexus', 'project.yaml')
+          
+          if (fs.existsSync(projectYamlPath)) {
+            try {
+              const yamlContent = fs.readFileSync(projectYamlPath, 'utf-8')
+              // 简单解析 YAML 中的 id 字段
+              const idMatch = yamlContent.match(/^id:\s*["']?([^"'\n]+)["']?/m)
+              if (idMatch && idMatch[1] === project.id) {
+                console.log(`[Nexus] 项目路径变化检测: ${project.path} -> ${candidatePath}`)
+                return {
+                  valid: false,
+                  newPath: candidatePath,
+                  reason: '项目文件夹已重命名或移动'
+                }
+              }
+            } catch {
+              // 读取或解析失败，跳过
+            }
+          }
+        }
+      } catch {
+        // 目录读取失败，跳过
+      }
+    }
+    
+    // 4. 没有找到匹配的项目
+    return {
+      valid: false,
+      reason: '项目路径不存在，且未能在常用目录中找到'
+    }
+  } catch (error) {
+    console.error('验证项目路径失败:', error)
+    return { valid: false, reason: '验证失败: ' + (error as Error).message }
+  }
+})
+
+// 批量验证多个项目的路径
+ipcMain.handle('project:verifyPaths', async (_, projects: Array<{ id: string, path: string, projectType?: string }>) => {
+  const results: Record<string, { valid: boolean, newPath?: string, reason?: string }> = {}
+  
+  for (const project of projects) {
+    try {
+      if (fs.existsSync(project.path)) {
+        results[project.id] = { valid: true }
+      } else {
+        // 调用单个验证
+        const result = await new Promise<any>((resolve) => {
+          // 复用上面的逻辑
+          const searchDirs: string[] = []
+          const typeBaseDirs: Record<string, string[]> = {
+            mcu: ['/Users/wq/Workshop/MCU', '/Users/wq/flickering_candlelight', '/Users/wq/esp32_c5_imu'],
+            ai: ['/Users/wq/Workshop/AI'],
+            software: ['/Users/wq/Workshop/Software', '/Users/wq'],
+            linux: ['/Users/wq/Workshop/Linux', '/Users/wq/linux'],
+            other: ['/Users/wq/Workshop', '/Users/wq'],
+          }
+          
+          const baseDirs = typeBaseDirs[project.projectType || 'other'] || typeBaseDirs.other
+          searchDirs.push(...baseDirs)
+          
+          const originalParent = path.dirname(project.path)
+          if (fs.existsSync(originalParent) && !searchDirs.includes(originalParent)) {
+            searchDirs.unshift(originalParent)
+          }
+          
+          for (const baseDir of searchDirs) {
+            if (!fs.existsSync(baseDir)) continue
+            
+            try {
+              const entries = fs.readdirSync(baseDir, { withFileTypes: true })
+              for (const entry of entries) {
+                if (!entry.isDirectory()) continue
+                
+                const candidatePath = path.join(baseDir, entry.name)
+                const projectYamlPath = path.join(candidatePath, '.nexus', 'project.yaml')
+                
+                if (fs.existsSync(projectYamlPath)) {
+                  try {
+                    const yamlContent = fs.readFileSync(projectYamlPath, 'utf-8')
+                    const idMatch = yamlContent.match(/^id:\s*["']?([^"'\n]+)["']?/m)
+                    if (idMatch && idMatch[1] === project.id) {
+                      resolve({ valid: false, newPath: candidatePath, reason: '项目文件夹已重命名或移动' })
+                      return
+                    }
+                  } catch {}
+                }
+              }
+            } catch {}
+          }
+          
+          resolve({ valid: false, reason: '项目路径不存在' })
+        })
+        
+        results[project.id] = result
+      }
+    } catch {
+      results[project.id] = { valid: false, reason: '验证出错' }
+    }
+  }
+  
+  return results
 })
 
 ipcMain.handle('project:createDir', async (_, dirPath: string) => {
@@ -680,6 +1172,15 @@ ipcMain.handle('shell:openInCursor', async (_, targetPath: string) => {
   }
 })
 
+ipcMain.handle('shell:openExternal', async (_, url: string) => {
+  try {
+    await shell.openExternal(url)
+    return true
+  } catch {
+    return false
+  }
+})
+
 // 项目类型到目录的映射
 const PROJECT_TYPE_DIRS: Record<string, string> = {
   'mcu': '/Users/wq/Workshop/MCU',
@@ -778,10 +1279,94 @@ ipcMain.handle('project:deleteDir', async (_, projectPath: string) => {
 const SIL_DIR = '.nexus'
 const SIL_SUBDIRS = ['debug', 'notes', 'snippets', 'configs']
 
+// 根据模板配置生成 Cursor Rules 内容
+function generateCursorRulesFromTemplate(projectConfig: any, templateConfig: typeof DEFAULT_TEMPLATE_CONFIG): string {
+  const { templates } = templateConfig
+  
+  // 为每种文档类型生成格式说明
+  const generateTemplateGuide = (template: typeof templates.debug, dirName: string) => {
+    const fields = template.frontmatterFields
+      .map(f => {
+        let example = ''
+        if (f.type === 'tags') example = '[tag1, tag2]'
+        else if (f.type === 'select' && f.options) example = f.options[0]
+        else if (f.type === 'date') example = 'YYYY-MM-DD'
+        else if (f.default) example = String(f.default)
+        else example = f.placeholder || '...'
+        return `${f.name}: ${example}  # ${f.label}${f.required ? ' (必填)' : ''}`
+      })
+      .join('\n')
+    
+    return `### ${template.name} (.nexus/${dirName}/)
+${template.description}
+
+**文档格式：**
+\`\`\`markdown
+---
+${fields}
+---
+
+${template.contentTemplate}
+\`\`\`
+
+**AI 生成指导：**
+${template.aiPrompt}
+`
+  }
+  
+  return `# Nexus 项目开发规则
+
+## 项目信息
+
+- **项目名称**: ${projectConfig.name}
+- **芯片**: ${projectConfig.chip || '未指定'}
+- **框架**: ${projectConfig.framework || '未指定'}
+- **外设**: ${(projectConfig.peripherals || []).join(', ') || '无'}
+
+## 开发经验记录
+
+此项目由 Nexus 管理，开发过程中请注意记录有价值的经验。
+
+当用户说 "帮我记录这个调试经验"、"保存这个代码片段"、"记个笔记" 等类似指令时，
+AI 应该按照下面的模板格式生成文档并保存到对应目录。
+
+---
+
+${generateTemplateGuide(templates.debug, 'debug')}
+
+---
+
+${generateTemplateGuide(templates.snippet, 'snippets')}
+
+---
+
+${generateTemplateGuide(templates.note, 'notes')}
+
+---
+
+${generateTemplateGuide(templates.config, 'configs')}
+
+---
+
+## 同步到知识库
+
+开发完成后，回到 Nexus 应用点击「一键导入」，将经验同步到全局知识库。
+
+## 通用设置
+
+- 自动添加时间戳: ${templateConfig.settings.autoAddTimestamp ? '是' : '否'}
+- 默认标签: ${templateConfig.settings.defaultTags.join(', ') || '无'}
+- AI 分析启用: ${templateConfig.settings.aiAnalysisEnabled ? '是' : '否'}
+`
+}
+
 // 初始化 .nexus 项目目录
 ipcMain.handle('sil:init', async (_, projectPath: string, config: any) => {
   try {
     const silPath = path.join(projectPath, SIL_DIR)
+    
+    // 加载全局模板配置
+    const templateConfig = loadTemplateConfig()
     
     // 创建 .nexus 目录结构
     if (!fs.existsSync(silPath)) {
@@ -796,8 +1381,9 @@ ipcMain.handle('sil:init', async (_, projectPath: string, config: any) => {
       }
     }
     
-    // 写入 project.yaml 配置文件
+    // 写入 project.yaml 配置文件（包含项目 ID 用于路径变化检测）
     const projectConfig = {
+      id: config.id || `proj_${Date.now()}`,  // 唯一标识，用于路径变化时匹配
       name: config.name || path.basename(projectPath),
       description: config.description || '',
       chip: config.chip || '',
@@ -820,88 +1406,59 @@ ipcMain.handle('sil:init', async (_, projectPath: string, config: any) => {
     
     fs.writeFileSync(path.join(silPath, 'project.yaml'), yamlContent, 'utf-8')
     
-    // 创建 README
+    // 把模板配置也写入项目（让项目独立，方便版本控制）
+    fs.writeFileSync(
+      path.join(silPath, 'templates.json'),
+      JSON.stringify(templateConfig, null, 2),
+      'utf-8'
+    )
+    
+    // 创建 README（使用模板配置中的信息）
+    const { templates } = templateConfig
     const readmeContent = `# ${projectConfig.name}
 
 > 此目录由 Nexus 管理，存储项目开发经验和笔记。
 
 ## 目录结构
 
-- \`debug/\` - 调试经验和问题解决记录
-- \`notes/\` - 开发笔记
-- \`snippets/\` - 代码片段
-- \`configs/\` - 配置备份
+- \`debug/\` - ${templates.debug.description}
+- \`notes/\` - ${templates.note.description}
+- \`snippets/\` - ${templates.snippet.description}
+- \`configs/\` - ${templates.config.description}
 
 ## 文档格式
 
-所有文档使用 Markdown 格式，带 YAML frontmatter：
+所有文档使用 Markdown 格式，带 YAML frontmatter。详细模板配置见 \`templates.json\`。
+
+### 调试经验示例
 
 \`\`\`markdown
----
-title: 文档标题
-tags: [tag1, tag2]
-created: 2024-01-01
----
-
-文档内容...
+${templates.debug.contentTemplate}
 \`\`\`
+
+### 代码片段示例
+
+\`\`\`markdown
+${templates.snippet.contentTemplate}
+\`\`\`
+
+## 模板配置
+
+项目使用的模板配置保存在 \`templates.json\`，可在 Nexus 应用的「模板设置」中自定义。
 `
     fs.writeFileSync(path.join(silPath, 'README.md'), readmeContent, 'utf-8')
     
-    // 创建 .cursor/rules/nexus.mdc 项目规则（让 Cursor 自动识别 Nexus 项目）
+    // 创建 .cursor/rules/nexus.mdc 项目规则（使用自定义模板配置）
     const cursorRulesDir = path.join(projectPath, '.cursor', 'rules')
     if (!fs.existsSync(cursorRulesDir)) {
       fs.mkdirSync(cursorRulesDir, { recursive: true })
     }
     
-    const cursorRuleContent = `# Nexus 项目开发规则
-
-## 项目信息
-
-- **项目名称**: ${projectConfig.name}
-- **芯片**: ${projectConfig.chip || '未指定'}
-- **框架**: ${projectConfig.framework || '未指定'}
-- **外设**: ${(projectConfig.peripherals || []).join(', ') || '无'}
-
-## 开发经验记录
-
-此项目由 Nexus 管理，开发过程中请注意记录有价值的经验：
-
-### 调试经验 (.nexus/debug/)
-当解决了一个 bug 或问题时，使用以下格式记录：
-- 告诉 AI "帮我记录这个调试经验" 或 "保存这个问题的解决方案"
-- AI 会自动保存到 \`.nexus/debug/\` 目录
-
-### 代码片段 (.nexus/snippets/)
-当写了有价值的代码时：
-- 告诉 AI "把这段代码保存到 nexus" 或 "记录这个代码片段"
-- AI 会自动保存到 \`.nexus/snippets/\` 目录
-
-### 开发笔记 (.nexus/notes/)
-当学到新知识时：
-- 告诉 AI "记个笔记" 或 "帮我记录这个知识点"
-- AI 会自动保存到 \`.nexus/notes/\` 目录
-
-## 文档格式
-
-所有记录使用 Markdown + YAML frontmatter 格式：
-
-\`\`\`markdown
----
-title: "标题"
-tags: [tag1, tag2]
-created: YYYY-MM-DD
----
-
-内容...
-\`\`\`
-
-## 同步到知识库
-
-开发完成后，回到 Nexus 应用点击「一键导入」，将经验同步到全局知识库。
-`
-    
+    const cursorRuleContent = generateCursorRulesFromTemplate(projectConfig, templateConfig)
     fs.writeFileSync(path.join(cursorRulesDir, 'nexus.mdc'), cursorRuleContent, 'utf-8')
+    
+    // 记录项目使用的模板版本
+    recordProjectTemplateUsage(projectPath, projectConfig.name, templateConfig.version)
     
     return true
   } catch (error) {
@@ -985,11 +1542,18 @@ async function analyzeDocWithAI(content: string, type: string, filename: string,
 }`,
     notes: `分析这篇笔记文档，提取关键信息，返回 JSON 格式：
 {
-  "title": "笔记标题（中文）",
+  "title": "笔记标题（中文，简洁明了）",
   "summary": "内容摘要（50字以内）",
-  "category": "分类（hardware/software/protocol/algorithm/other）",
+  "category": "分类（必须是以下之一）",
   "tags": ["标签1", "标签2", "标签3"]
-}`,
+}
+
+笔记分类说明（请根据内容特征选择最匹配的一个）：
+- learning: 学习笔记 — 技术学习、文档阅读、课程记录、新知识探索、教程笔记
+- summary: 开发总结 — 项目复盘、阶段总结、功能开发记录、版本发布总结、工作汇报
+- design: 方案设计 — 架构设计、技术选型、方案对比、系统设计、功能规划
+- issue: 问题记录 — 踩坑记录、升级迁移问题、兼容性问题、已知限制、待解决问题
+- reference: 参考手册 — 速查表、API参考、配置说明、命令速查、接口文档`,
     snippets: `分析这篇代码片段文档，提取关键信息，返回 JSON 格式：
 {
   "name": "代码片段名称（中文）",
@@ -1043,7 +1607,7 @@ async function analyzeDocWithAI(content: string, type: string, filename: string,
 }
 
 // 检测项目是否有待同步的新文档
-ipcMain.handle('sil:checkPending', async (_, projectPath: string) => {
+ipcMain.handle('sil:checkPending', async (_, projectPath: string, projectType?: string) => {
   try {
     const silPath = path.join(projectPath, SIL_DIR)
     if (!fs.existsSync(silPath)) {
@@ -1051,7 +1615,8 @@ ipcMain.handle('sil:checkPending', async (_, projectPath: string) => {
     }
     
     const projectName = path.basename(projectPath)
-    const projectType = detectProjectType(projectPath)  // 使用项目类型
+    // 优先使用前端传入的项目类型，否则根据路径推断
+    const resolvedType = projectType || detectProjectType(projectPath)
     let pendingCount = 0
     const details: Record<string, number> = {}
     
@@ -1068,10 +1633,10 @@ ipcMain.handle('sil:checkPending', async (_, projectPath: string) => {
         const sourceStats = fs.statSync(sourcePath)
         const sourceModTime = sourceStats.mtime.getTime()
         
-        // 确定目标文件路径 - 使用检测到的项目类型
+        // 确定目标文件路径 - 使用解析后的项目类型
         const category = subdir === 'notes' ? null : subdir.replace(/s$/, '')
         const targetDir = category 
-          ? path.join(DATA_DIR, 'knowledge', projectType, category)
+          ? path.join(DATA_DIR, 'knowledge', resolvedType, category)
           : path.join(DATA_DIR, 'notes')
         
         const jsonFilename = file.replace('.md', '.json')
@@ -1141,7 +1706,7 @@ ipcMain.handle('knowledge:clear', async () => {
     
     let deleted = 0
     
-    // 递归删除所有 JSON 文件
+    // 递归删除所有知识库数据文件（.json 和 .md）
     function clearDir(dir: string) {
       const items = fs.readdirSync(dir)
       for (const item of items) {
@@ -1149,7 +1714,7 @@ ipcMain.handle('knowledge:clear', async () => {
         const stat = fs.statSync(itemPath)
         if (stat.isDirectory()) {
           clearDir(itemPath)
-        } else if (item.endsWith('.json')) {
+        } else if (item.endsWith('.json') || item.endsWith('.md')) {
           fs.unlinkSync(itemPath)
           deleted++
         }
@@ -1161,7 +1726,7 @@ ipcMain.handle('knowledge:clear', async () => {
     // 同时清理 notes 目录
     const notesDir = path.join(DATA_DIR, 'notes')
     if (fs.existsSync(notesDir)) {
-      const noteFiles = fs.readdirSync(notesDir).filter(f => f.endsWith('.json'))
+      const noteFiles = fs.readdirSync(notesDir).filter(f => f.endsWith('.json') || f.endsWith('.md'))
       for (const file of noteFiles) {
         fs.unlinkSync(path.join(notesDir, file))
         deleted++
@@ -1387,7 +1952,7 @@ function jsonToMarkdown(entry: any, category: string): string {
 
 // 从项目同步到管理器（带 AI 分析）
 // v5: 写入 knowledge/{projectType}/{category}/ 知识库格式
-ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string) => {
+ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, projectType?: string) => {
   try {
     const silPath = path.join(projectPath, SIL_DIR)
     if (!fs.existsSync(silPath)) {
@@ -1396,9 +1961,9 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string) =
     
     sendSyncProgress('准备同步', 0, 1)
     
-    // 根据项目路径推断项目类型
-    const projectType = detectProjectType(projectPath)
-    console.log(`[Sync] 项目路径: ${projectPath}, 识别类型: ${projectType}`)
+    // 优先使用前端传入的项目类型，否则根据路径推断
+    const resolvedType = projectType || detectProjectType(projectPath)
+    console.log(`[Sync] 项目路径: ${projectPath}, 类型: ${resolvedType}${projectType ? ' (前端指定)' : ' (路径推断)'}`)
     
     // 尝试从配置文件读取 API Key
     let actualApiKey = apiKey
@@ -1440,9 +2005,9 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string) =
     for (const { silDir, category, name } of syncTypes) {
       const sourceDir = path.join(silPath, silDir)
       
-      // 确定目标目录 - 使用检测到的项目类型
+      // 确定目标目录 - 使用解析后的项目类型
       const targetDir = category 
-        ? path.join(DATA_DIR, 'knowledge', projectType, category)
+        ? path.join(DATA_DIR, 'knowledge', resolvedType, category)
         : path.join(DATA_DIR, 'notes')
       
       if (!fs.existsSync(sourceDir)) continue
@@ -1472,7 +2037,9 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string) =
             aiData = await analyzeDocWithAI(fileContent, silDir, file, actualApiKey)
           }
           
-          const baseId = `${projectName}-${file.replace('.md', '')}`
+          // 使用安全项目名作为 ID 前缀（与文件名一致，确保前后端 ID 匹配）
+          const safeProjectNameForId = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
+          const baseId = `${safeProjectNameForId}-${file.replace('.md', '')}`
           let jsonData: any
           
           if (!category) {
@@ -1485,7 +2052,10 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string) =
               tags: [...new Set([...(aiData?.tags || []), ...(meta.tags || []), projectName])],
               createdAt: meta.createdAt || now,
               updatedAt: now,
-              sourceProject: projectPath
+              // 项目关联（双向索引）
+              projectName: projectName,
+              projectPath: projectPath,
+              sourceProject: projectPath  // 兼容旧字段
             }
           } else {
             // 知识库: 统一 KnowledgeEntry 格式
@@ -1523,11 +2093,14 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string) =
               id: meta.id || baseId,
               title,
               content: content,
-              projectType,  // 使用检测到的项目类型
+              projectType: resolvedType,  // 使用解析后的项目类型
               category,
               tags,
               severity: aiData?.severity || meta.severity,
-              sourceProject: projectPath,
+              // 项目关联（双向索引）
+              projectName: projectName,
+              projectPath: projectPath,
+              sourceProject: projectPath,  // 兼容旧字段
               metadata,
               createdAt: meta.createdAt || now,
               updatedAt: now,
@@ -1931,6 +2504,10 @@ ipcMain.handle('ai:generateProjectDocs', async (_, projectPath: string, apiKey: 
     const projectName = path.basename(projectPath)
     const silPath = path.join(projectPath, SIL_DIR)
     
+    // 加载模板配置
+    const templateConfig = loadTemplateConfig()
+    const { templates } = templateConfig
+    
     // 确保 .nexus 目录存在
     if (!fs.existsSync(silPath)) {
       fs.mkdirSync(silPath, { recursive: true })
@@ -1980,7 +2557,11 @@ ipcMain.handle('ai:generateProjectDocs', async (_, projectPath: string, apiKey: 
       } catch {}
     }
     
-    // 构建 prompt 让 AI 生成知识库文档
+    // 构建 prompt 让 AI 生成知识库文档（使用自定义模板）
+    const noteTemplate = templates.note
+    const snippetTemplate = templates.snippet
+    const configTemplate = templates.config
+    
     const prompt = `分析这个项目并生成知识库文档。
 
 ${projectInfo}
@@ -1992,14 +2573,26 @@ ${readmeContent ? `=== README ===\n${readmeContent}\n` : ''}
 
 ${codeSnippets ? `=== 代码片段 ===\n${codeSnippets}` : ''}
 
+=== 文档生成指导 ===
+
+笔记文档指导：
+${noteTemplate.aiPrompt}
+
+代码片段指导：
+${snippetTemplate.aiPrompt}
+
+配置模板指导：
+${configTemplate.aiPrompt}
+
 请根据项目内容生成以下 JSON 格式的知识文档（只返回 JSON）:
 {
   "notes": [
     {
       "filename": "project-overview.md",
       "title": "项目概述",
-      "content": "Markdown 格式的项目技术架构和设计说明（200-400字）",
-      "tags": ["标签1", "标签2"]
+      "content": "按照笔记模板格式生成的 Markdown 内容（200-500字）",
+      "tags": ["标签1", "标签2"],
+      "category": "${noteTemplate.frontmatterFields.find(f => f.name === 'category')?.default || 'learning'}"
     }
   ],
   "snippets": [
@@ -2009,15 +2602,17 @@ ${codeSnippets ? `=== 代码片段 ===\n${codeSnippets}` : ''}
       "description": "简短描述",
       "language": "c/python/javascript等",
       "code": "关键代码片段",
-      "tags": ["标签"]
+      "tags": ["标签"],
+      "category": "${snippetTemplate.frontmatterFields.find(f => f.name === 'category')?.default || 'utility'}"
     }
   ],
   "configs": [
     {
       "filename": "config-name.md",
       "title": "配置说明",
-      "content": "关键配置的说明和模板",
-      "tags": ["标签"]
+      "content": "按照配置模板格式生成的 Markdown 内容",
+      "tags": ["标签"],
+      "configType": "${configTemplate.frontmatterFields.find(f => f.name === 'configType')?.default || 'other'}"
     }
   ]
 }

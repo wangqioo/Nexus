@@ -1,8 +1,9 @@
 .container {
-  border: 1px solid #303030;
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
   overflow: hidden;
-  background: #1e1e1e;
+  background: var(--bg-secondary);
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .header {
@@ -10,20 +11,23 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #252525;
-  border-bottom: 1px solid #303030;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .language {
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
   font-weight: 500;
+  transition: color 0.3s;
 }
 
 .copyBtn {
-  color: #888 !important;
+  color: var(--text-secondary) !important;
+  transition: color 0.3s;
 }
 
 .copyBtn:hover {
-  color: #fff !important;
+  color: var(--text-primary) !important;
 }
