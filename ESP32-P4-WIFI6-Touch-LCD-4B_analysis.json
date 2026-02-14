@@ -1,0 +1,108 @@
+{
+  "chip": {
+    "name": "ESP32-P4",
+    "manufacturer": "Espressif"
+  },
+  "framework": {
+    "name": "ESP-IDF",
+    "version": "5.4.2"
+  },
+  "peripherals": [
+    "MIPI DSI LCD (ST7703, 720x720)",
+    "Touchscreen (capacitive)",
+    "MIPI CSI Camera (OV5647)",
+    "I2C (ES8311 codec, camera config)",
+    "I2S (audio: ES8311)",
+    "SDMMC (4-bit SD card)",
+    "UART/RS485",
+    "USB OTG (extend screen, UAC, HID)",
+    "WiFi 6",
+    "Ethernet (EMAC + SPI PHY)",
+    "LEDC (backlight PWM)",
+    "GPIO",
+    "PSRAM (SPIRAM)"
+  ],
+  "configFiles": [
+    {
+      "filename": "sdkconfig",
+      "path": "13_ethernetbasic/sdkconfig",
+      "content_preview": "# Espressif IoT Development Framework (ESP-IDF) 5.4.2\nCONFIG_IDF_TARGET=\"esp32p4\"\nCONFIG_IDF_TARGET_ESP32P4=y\nCONFIG_SOC_LCDCAM_SUPPORTED=y\nCONFIG_SOC_USB_OTG_SUPPORTED=y\nCONFIG_SOC_EMAC_SUPPORTED=y\nCONFIG_SOC_SDMMC_HOST_SUPPORTED=y\n..."
+    },
+    {
+      "filename": "sdkconfig.defaults",
+      "path": "11_esp_brookesia_phone/sdkconfig.defaults",
+      "content_preview": "CONFIG_IDF_TARGET=\"esp32p4\"\nCONFIG_ESPTOOLPY_FLASHSIZE_32MB=y\nCONFIG_SPIRAM=y\nCONFIG_SPIRAM_SPEED_200M=y\nCONFIG_BSP_LCD_DPI_BUFFER_NUMS=2\nCONFIG_CAMERA_OV5647=y\nCONFIG_LV_USE_DEMO_WIDGETS=y\nCONFIG_SLAVE_IDF_TARGET_ESP32C6=y\n..."
+    },
+    {
+      "filename": "sdkconfig.defaults.esp32p4",
+      "path": "12_usb_extend_screen/sdkconfig.defaults.esp32p4",
+      "content_preview": "CONFIG_IDF_TARGET=\"esp32p4\"\nCONFIG_BSP_BOARD_TYPE_FIB=y\nCONFIG_BSP_LCD_CONTROLLER_EK79007=y\nCONFIG_USB_EXTEND_SCREEN_WIDTH=720\nCONFIG_USB_EXTEND_SCREEN_HEIGHT=720\n..."
+    },
+    {
+      "filename": "CMakeLists.txt",
+      "path": "11_esp_brookesia_phone/CMakeLists.txt",
+      "content_preview": "cmake_minimum_required(VERSION 3.5)\ninclude($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(esp_brookesia_demo VERSION 1.0.1)\n..."
+    },
+    {
+      "filename": "CMakeLists.txt",
+      "path": "12_usb_extend_screen/CMakeLists.txt",
+      "content_preview": "cmake_minimum_required(VERSION 3.16)\ninclude($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(usb_touch_screen)\n..."
+    }
+  ],
+  "codeSnippets": [
+    {
+      "name": "BSP Display Init",
+      "category": "display",
+      "description": "LVGL display initialization with SPIRAM buffer and double buffering",
+      "file_path": "11_esp_brookesia_phone/main/main.cpp"
+    },
+    {
+      "name": "MIPI DSI ST7703 LCD Init",
+      "category": "display",
+      "description": "MIPI DSI bus, DBI IO, ST7703 panel init and LDO PHY power",
+      "file_path": "07_color_panel/main/test_esp_lcd_st7703.c"
+    },
+    {
+      "name": "USB Extend Screen Main",
+      "category": "usb",
+      "description": "USB extend screen app entry: USB init, LCD, touch HID, UAC",
+      "file_path": "12_usb_extend_screen/main/usb_extend_screen.c"
+    },
+    {
+      "name": "Touch to USB HID",
+      "category": "touch",
+      "description": "Read touch coordinates and send via USB HID report",
+      "file_path": "12_usb_extend_screen/main/app_touch.c"
+    },
+    {
+      "name": "UAC I2S Read/Write",
+      "category": "audio",
+      "description": "USB Audio Class I2S read/write via esp_codec_dev",
+      "file_path": "12_usb_extend_screen/main/app_uac.c"
+    },
+    {
+      "name": "BSP Extra I2S Codec",
+      "category": "audio",
+      "description": "I2S codec init, mute, volume control via ES8311",
+      "file_path": "11_esp_brookesia_phone/components/bsp_extra/src/bsp_board_extra.c"
+    },
+    {
+      "name": "Camera Pipeline Buffer",
+      "category": "camera",
+      "description": "esp_video camera pipeline buffer alloc and stream management",
+      "file_path": "11_esp_brookesia_phone/components/apps/camera/app_camera_pipeline.cpp"
+    },
+    {
+      "name": "SDMMC Mount",
+      "category": "storage",
+      "description": "SD card mount with SDMMC host and FAT filesystem",
+      "file_path": "04_sdmmc/main/sd_card_example_main.c"
+    },
+    {
+      "name": "Phone App Install",
+      "category": "application",
+      "description": "Install multiple apps: Camera, Music, Draw, Calculator, Settings",
+      "file_path": "11_esp_brookesia_phone/main/main.cpp"
+    }
+  ]
+}

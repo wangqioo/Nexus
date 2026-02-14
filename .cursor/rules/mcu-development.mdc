@@ -1,0 +1,44 @@
+---
+description: MCU 开发经验参考 - 结合本地代码库和 Nexus 数据
+globs: "**/*.{c,cpp,h,hpp,py,cmake,txt,defaults,yml}"
+alwaysApply: false
+---
+
+# MCU 开发指南
+
+## 核心原则
+
+1. **本地代码优先**: 先在 `/Users/wq/` 下找已完成的项目参考
+2. **Nexus 补充**: 查阅 `~/.nexus/` 中的结构化经验数据
+3. **实践验证**: 所有代码都来自真实项目，已验证可用
+
+## 快速参考
+
+| 需求 | 参考位置 |
+|------|----------|
+| WS2812 LED | `/Users/wq/flickering_candlelight/` |
+| IMU 传感器 | `/Users/wq/flickering_candlelight/*/main/qmi8658.c` |
+| ESP32-P4 显示 | `/Users/wq/ESP32-P4-WIFI6-Touch-LCD-4B/` |
+| 墨水屏图像 | `/Users/wq/InkTime/render_daily_photo.py` |
+| SiFli 平台 | `/Users/wq/OpenSiFli/sifli-sdk/` |
+| 小智 AI | `/Users/wq/xiaozhi-project/` |
+
+## 经验数据库
+
+```
+~/.nexus/
+├── platforms/      # 平台配置 (ESP32-P4, SF32LB5xx...)
+├── peripherals/    # 外设接线 (WS2812, QMI8658, ST7703...)
+├── snippets/       # 代码片段 (火焰效果、抖动算法...)
+├── configs/        # 配置模板 (sdkconfig...)
+└── notes/          # 开发笔记
+```
+
+## 常用外设接线
+
+| 外设 | 接口 | 典型引脚 |
+|------|------|----------|
+| WS2812 | RMT | GPIO14 (DIN) |
+| QMI8658 | I2C | SDA=11, SCL=12, Addr=0x6B |
+| ES8311 | I2S+I2C | MCLK, BCLK, WS, DIN/DOUT |
+| ST7703 | MIPI DSI | 2-lane, 500Mbps |

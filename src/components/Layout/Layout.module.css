@@ -1,0 +1,150 @@
+.layout {
+  height: 100vh;
+  width: 100vw;
+}
+
+.sider {
+  border-right: 1px solid #1f1f1f;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #0d0d0d !important;
+}
+
+.logo {
+  height: 90px;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 16px 16px 16px;
+  border-bottom: 1px solid #1f1f1f;
+  gap: 10px;
+  -webkit-app-region: drag;
+}
+
+.logoIcon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.logoIconCollapsed {
+  font-size: 24px;
+}
+
+.logoTextContainer {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.logoText {
+  margin: 0 !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  white-space: nowrap;
+}
+
+.version {
+  font-size: 10px;
+  color: #666;
+}
+
+.menu {
+  flex: 1;
+  padding: 12px 0;
+  border-right: none !important;
+  background: transparent !important;
+  -webkit-app-region: no-drag;
+}
+
+.menu :global(.ant-menu-item) {
+  margin: 4px 8px !important;
+  border-radius: 6px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+}
+
+.menu :global(.ant-menu-item-selected) {
+  background: rgba(22, 119, 255, 0.15) !important;
+}
+
+.menu :global(.ant-menu-item-divider) {
+  margin: 8px 16px !important;
+  background: #1f1f1f !important;
+}
+
+.collapseBtn {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #666;
+  border-top: 1px solid #1f1f1f;
+  transition: color 0.2s;
+}
+
+.collapseBtn:hover {
+  color: #fff;
+}
+
+.header {
+  height: 60px;
+  background: #0d0d0d !important;
+  border-bottom: 1px solid #1f1f1f;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.titlebarDrag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  -webkit-app-region: drag;
+  z-index: 0;
+}
+
+.headerContent {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+  -webkit-app-region: no-drag;
+}
+
+.searchInput {
+  width: 100%;
+  background: transparent !important;
+  border: 1px solid #333 !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  height: 36px;
+}
+
+.searchInput input {
+  cursor: pointer !important;
+  background: transparent !important;
+}
+
+.searchInput:hover {
+  border-color: #444 !important;
+}
+
+.shortcut {
+  font-size: 11px;
+  color: #666;
+  background: #1f1f1f;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.content {
+  padding: 24px;
+  overflow: auto;
+  background: #0a0a0a;
+}

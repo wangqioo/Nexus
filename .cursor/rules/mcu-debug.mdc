@@ -1,0 +1,42 @@
+---
+description: MCU 调试经验 - 遇到编译/运行错误时自动搜索历史解决方案
+globs: "**/*.{c,cpp,h,log,txt}"
+alwaysApply: false
+---
+
+# MCU 调试指南
+
+遇到 MCU 开发问题时，优先查阅 `~/.nexus/debug/` 中的历史经验。
+
+## 调试流程
+
+1. **识别错误类型**
+   - 编译错误 → 检查 CMakeLists.txt, idf_component.yml
+   - 链接错误 → 检查组件依赖
+   - 运行时错误 → 检查 sdkconfig, 内存配置
+
+2. **搜索历史经验**
+   ```bash
+   grep -r "关键词" ~/.nexus/debug/
+   ```
+
+3. **参考解决方案**
+   - 每条记录包含 `symptom`, `rootCause`, `solution`
+   - 部分包含 `solutionCode` 代码示例
+
+## 常见问题类别
+
+| 类别 | 检查点 |
+|------|--------|
+| Flash 不足 | 启用 OTA, 调整分区表 |
+| 内存不足 | 检查 CONFIG_ESP_MAIN_TASK_STACK_SIZE |
+| 外设不工作 | 检查引脚定义, 电源, I2C 地址 |
+| 显示花屏 | 检查时序参数, PSRAM |
+| WiFi 连不上 | 检查 NVS, 天线 |
+
+## 严重等级
+
+- `critical`: 系统崩溃/无法启动
+- `high`: 功能完全失效
+- `medium`: 部分功能异常
+- `low`: 小问题/优化建议

@@ -1,0 +1,278 @@
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 0 4px 0 !important;
+  color: #fff !important;
+}
+
+/* 项目类型统计卡片 */
+.typeCardsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.typeCard {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  background: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.typeCard:hover {
+  border-color: #444;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.typeCardIcon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.typeCardInfo {
+  flex: 1;
+}
+
+.typeCardName {
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 2px;
+}
+
+.typeCardCount {
+  font-size: 22px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.typeCardLabel {
+  font-size: 11px;
+  color: #666;
+}
+
+/* 概览统计条 */
+.statsBar {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: #1a1a1a;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  flex-wrap: wrap;
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statNumber {
+  font-size: 24px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #888;
+}
+
+/* 最近活动 */
+.recentGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.listCard {
+  background: #1a1a1a !important;
+  border: 1px solid #2a2a2a !important;
+  border-radius: 12px !important;
+}
+
+.listCard :global(.ant-card-head) {
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.listCard :global(.ant-card-head-title) {
+  color: #e0e0e0;
+}
+
+.listItem {
+  padding: 10px 0 !important;
+  border-bottom: 1px solid #222 !important;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.listItem:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.listItem:last-child {
+  border-bottom: none !important;
+}
+
+.entryItem {
+  width: 100%;
+}
+
+.entryMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.unreadDot {
+  width: 8px;
+  height: 8px;
+  background: #1677ff;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
+}
+
+.entryTitle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entryPreview {
+  font-size: 12px;
+  display: block;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 欢迎 */
+.welcomeCard {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important;
+  border: 1px solid #1f3a5c !important;
+  border-radius: 12px !important;
+}
+
+.welcomeContent {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.welcomeContent h4 {
+  color: #fff !important;
+  margin-bottom: 8px !important;
+}
+
+.quickActions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+/* ========================================
+   同步进度条 - 全屏顶部
+   ======================================== */
+.syncProgressBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+  border-bottom: 2px solid #1677ff;
+  padding: 12px 24px;
+  box-shadow: 0 4px 20px rgba(22, 119, 255, 0.3);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.syncProgressHeader {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  min-width: 150px;
+}
+
+.syncProgressTrack {
+  flex: 1;
+  height: 8px;
+  background: #2a3f5f;
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 200px;
+}
+
+.syncProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #1677ff, #13c2c2, #52c41a);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.syncProgressFile {
+  font-size: 13px;
+  color: #8b949e;
+  white-space: nowrap;
+}
+
+.syncProgressCount {
+  font-size: 14px;
+  font-weight: 600;
+  color: #58a6ff;
+  white-space: nowrap;
+}

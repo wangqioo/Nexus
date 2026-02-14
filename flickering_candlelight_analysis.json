@@ -1,0 +1,178 @@
+{
+  "project_overview": {
+    "name": "Flickering Candlelight",
+    "description": "LED矩阵显示项目集合，基于ESP32实现多种视觉效果和交互式动画",
+    "total_projects": 11,
+    "categories": ["MicroPython (ESP32-C4)", "ESP-IDF (ESP32-S3)"]
+  },
+  "1_chip_and_framework": {
+    "esp32_c4_micropython": {
+      "chip": "ESP32-C4FH4",
+      "flash": "4MB",
+      "framework": "MicroPython",
+      "project": "9x14led (赛博项链)"
+    },
+    "esp32_s3_espidf": {
+      "chip": "ESP32-S3",
+      "framework": "ESP-IDF",
+      "version_min": "v4.1.0 或更高 (建议 v4.4+)",
+      "projects": [
+        "esp32s3_matrix_rainbow",
+        "esp32s3_candlelight",
+        "esp32s3_candlelight_imu",
+        "esp32s3_candlelight_sensitive",
+        "esp32s3_water_particles",
+        "esp32s3_water_flow",
+        "esp32s3_water_wave",
+        "esp32s3_antigravity",
+        "esp32s3_dual_effect",
+        "esp32s3_matrix_game"
+      ]
+    },
+    "dependencies": {
+      "espressif/led_strip": "^2.5.3",
+      "driver": "led_strip (RMT-based WS2812)"
+    }
+  },
+  "2_peripherals": {
+    "esp32_s3_projects": {
+      "ws2812_led_matrix": {
+        "type": "8x8 WS2812 可编程RGB LED矩阵",
+        "led_count": 64,
+        "gpio_pin": 14,
+        "interface": "单线 (RMT)",
+        "color_format": "GRB",
+        "resolution_hz": "10MHz",
+        "driver": "led_strip (RMT)"
+      },
+      "qmi8658_imu": {
+        "type": "QMI8658 6轴加速度计/陀螺仪",
+        "interface": "I2C",
+        "sda_pin": 11,
+        "scl_pin": 12,
+        "i2c_freq": "400kHz",
+        "i2c_addr": "0x6B",
+        "accel_range": "2G",
+        "accel_odr": "1000Hz",
+        "used_by": [
+          "esp32s3_candlelight_imu",
+          "esp32s3_candlelight_sensitive",
+          "esp32s3_water_particles",
+          "esp32s3_water_flow",
+          "esp32s3_water_wave",
+          "esp32s3_antigravity",
+          "esp32s3_dual_effect",
+          "esp32s3_matrix_game"
+        ]
+      }
+    },
+    "esp32_c4_project_9x14led": {
+      "is31fl3731": {
+        "type": "IS31FL3731 LED驱动芯片",
+        "interface": "I2C",
+        "sda_pin": 0,
+        "scl_pin": 1,
+        "matrix": "9x14 (144 PWM LEDs)"
+      },
+      "battery": {
+        "type": "602020 200mAh 锂电池",
+        "adc_pin": 3,
+        "vref": 3.3,
+        "div_ratio": 2.0,
+        "full_voltage": 4.20,
+        "empty_voltage": 3.30
+      },
+      "button": {
+        "pin": 9,
+        "mode": "INPUT_PULLUP"
+      }
+    }
+  },
+  "3_key_config_files": {
+    "ws2812_matrix.h": {
+      "path": "esp32s3_*/main/ws2812_matrix.h",
+      "key_defines": {
+        "MATRIX_GPIO_PIN": 14,
+        "MATRIX_ROWS": 8,
+        "MATRIX_COLS": 8,
+        "MATRIX_LED_COUNT": 64,
+        "MATRIX_BRIGHTNESS": "0-255 (candlelight用16, rainbow用50)"
+      }
+    },
+    "qmi8658.h": {
+      "path": "esp32s3_*/main/qmi8658.h",
+      "key_defines": {
+        "QMI8658_I2C_SDA": 11,
+        "QMI8658_I2C_SCL": 12,
+        "QMI8658_I2C_FREQ": 400000,
+        "QMI8658_ADDR": "0x6B"
+      }
+    },
+    "sdkconfig.defaults": {
+      "path": "esp32s3_*/sdkconfig.defaults",
+      "content": "CONFIG_COMPILER_OPTIMIZATION_SIZE=y, CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y"
+    },
+    "CMakeLists.txt": {
+      "path": "esp32s3_*/CMakeLists.txt",
+      "target": "project(esp32s3_<name>)"
+    },
+    "idf_component.yml": {
+      "path": "esp32s3_*/main/idf_component.yml",
+      "deps": "espressif/led_strip: ^2.5.3"
+    }
+  },
+  "4_flame_effect_algorithm": {
+    "description": "基于热量扩散的实时火焰模拟算法",
+    "source_files": ["candle_effect.c", "candle_effect.h"],
+    "algorithm_steps": [
+      "1. 底部热源：8x10火焰缓冲区(FIRE_HEIGHT=10)，底部2行为热源",
+      "2. 热源分布：烛芯(列3-4)较暗形成空心，列2/5最亮，列1/6中等，列0/7无热",
+      "3. 热量传播：自下而上，取下方/左下/右下的平均热量",
+      "4. 衰减公式：decay = 12 + (y * 5)，高度越高衰减越大",
+      "5. 随机闪烁：flicker = (random % 30) - 15",
+      "6. 新热量：new_heat = avg_heat - decay + flicker",
+      "7. 温度映射：heat值(0-255)通过matrix_set_pixel_brightness转为暖色调"
+    ],
+    "key_code_snippets": {
+      "heat_source_layout": "// 烛芯外围(2和5列)热量最高\nif (x == 2 || x == 5) {\n  fire_buffer[FIRE_HEIGHT-1][x] = 220 + (esp_random() % 35);\n  fire_buffer[FIRE_HEIGHT-2][x] = 200 + (esp_random() % 55);\n}",
+      "heat_propagation": "// 正下方+下方两格+左下右下\nheat_sum += fire_buffer[y+1][x] + fire_buffer[y+2][x];\nif (x>0) heat_sum += fire_buffer[y+1][x-1];\nif (x<7) heat_sum += fire_buffer[y+1][x+1];\navg_heat = heat_sum / heat_count;",
+      "decay_and_flicker": "int decay = 12 + (y * 5);\nint flicker = (esp_random() % 30) - 15;\nint new_heat = avg_heat - decay + flicker;",
+      "tilt_offset_imu": "// candlelight_imu 版本：倾斜时火焰偏移\nint offset = (int)(tilt_x * 2.0f);  // tilt_x: -1.0~1.0\nint offset_x = x + offset;\nheat_sum += fire_buffer[y+1][offset_x];"
+    },
+    "color_mapping": {
+      "function": "matrix_set_pixel_brightness() in ws2812_matrix.c",
+      "logic": "brightness(0-255) -> 暖色调: g=255, r=brightness*180, b=0 (GRB格式需交换)",
+      "palette": "暗红 -> 橙红 -> 黄橙"
+    }
+  },
+  "5_other_valuable_snippets": {
+    "water_particle_physics": {
+      "file": "water_effect.h / water_effect.c",
+      "params": {
+        "MAX_PARTICLES": 19,
+        "GRAVITY_SCALE": 0.5,
+        "FRICTION": 0.70,
+        "MAX_VELOCITY": 5.0,
+        "TRAIL_DECAY": 0.2
+      }
+    },
+    "adaptive_imu_filter": {
+      "file": "esp32s3_water_flow/main.c",
+      "params": {
+        "DEAD_ZONE": 0.08,
+        "GRAVITY_MULTIPLIER": 3.0,
+        "GYRO_THRESHOLD": 3.0,
+        "ALPHA_STATIC": 0.15,
+        "ALPHA_ROTATING": 0.7
+      }
+    },
+    "shake_detection": {
+      "file": "esp32s3_dual_effect/main.c",
+      "logic": "加速度变化>2.5g连续3次触发模式切换，1.5秒冷却"
+    },
+    "9x14led_fire": {
+      "method": "预渲染帧播放 (anim.bin)",
+      "delay_ms": 15
+    }
+  }
+}

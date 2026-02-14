@@ -1,0 +1,101 @@
+.modal :global(.ant-modal-content) {
+  padding: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #1a1a2e 0%, #0f0f1a 100%);
+}
+
+.container {
+  padding: 40px 32px;
+  text-align: center;
+}
+
+/* 流程图 */
+.flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.step {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #2a2a3e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.step:hover {
+  transform: scale(1.1);
+}
+
+.step.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.15);
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+}
+
+.step.done {
+  background: #3a3a5e;
+}
+
+.stepIcon {
+  font-size: 22px;
+}
+
+.line {
+  width: 24px;
+  height: 2px;
+  background: #2a2a3e;
+  margin: 0 4px;
+  transition: background 0.3s ease;
+}
+
+.line.lineDone {
+  background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+/* 信息 */
+.info {
+  margin-bottom: 32px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* 底部 */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skip {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.skip:hover {
+  color: rgba(255, 255, 255, 0.7);
+}

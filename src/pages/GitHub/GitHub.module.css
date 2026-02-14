@@ -1,0 +1,271 @@
+.container {
+  padding: 24px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0 !important;
+  color: #fff !important;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  width: 300px;
+}
+
+.categorySelect {
+  width: 160px;
+}
+
+.stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.statTag {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.statTag:hover {
+  transform: scale(1.05);
+}
+
+.content {
+  min-height: 400px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+}
+
+/* 仓库卡片 */
+.repoCard {
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 8px !important;
+  transition: all 0.3s;
+}
+
+.repoCard:hover {
+  border-color: #1890ff !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+}
+
+.repoCard.cloned {
+  border-color: #52c41a !important;
+}
+
+.repoCard :global(.ant-card-body) {
+  padding: 16px !important;
+}
+
+.repoCard :global(.ant-card-actions) {
+  background: #141414 !important;
+  border-top: 1px solid #333 !important;
+}
+
+.repoCard :global(.ant-card-actions > li) {
+  color: #999 !important;
+  transition: color 0.2s;
+}
+
+.repoCard :global(.ant-card-actions > li:hover) {
+  color: #1890ff !important;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.repoName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.starBtn {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.starBtn:hover {
+  transform: scale(1.2);
+}
+
+.star {
+  color: #faad14;
+  font-size: 14px;
+}
+
+.starEmpty {
+  color: #666;
+  font-size: 14px;
+}
+
+.starEmpty:hover {
+  color: #faad14;
+}
+
+.editBtn {
+  color: #666;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.2s;
+}
+
+.editBtn:hover {
+  color: #1890ff;
+}
+
+.deleteBtn {
+  color: #666;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.2s;
+}
+
+.deleteBtn:hover {
+  color: #ff4d4f;
+}
+
+.categoryTag {
+  font-size: 11px;
+  padding: 0 6px;
+  margin: 0;
+}
+
+.categoryTagRow {
+  font-size: 11px;
+  padding: 0 6px;
+  margin-bottom: 8px;
+}
+
+.description {
+  color: #999 !important;
+  font-size: 13px;
+  margin-bottom: 12px !important;
+  min-height: 40px;
+}
+
+.infoIcon {
+  margin-left: 6px;
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.infoIcon:hover {
+  opacity: 1;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 0 6px;
+  background: #262626 !important;
+  border-color: #333 !important;
+  color: #999 !important;
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid #333;
+}
+
+.lastUpdate {
+  font-size: 11px;
+}
+
+/* API Key 配置区域 */
+.apiKeySection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #141414;
+  border-radius: 6px;
+  border: 1px solid #333;
+}
+
+.apiKeyInput {
+  flex: 1;
+  max-width: 300px;
+}
+
+.apiKeyTip {
+  font-size: 12px;
+}
+
+.apiKeyTip a {
+  color: #1890ff;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .filters {
+    flex-direction: column;
+  }
+  
+  .searchInput {
+    width: 100%;
+  }
+  
+  .categorySelect {
+    width: 100%;
+  }
+  
+  .apiKeySection {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .apiKeyInput {
+    max-width: 100%;
+    width: 100%;
+  }
+}

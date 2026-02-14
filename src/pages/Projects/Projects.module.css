@@ -1,0 +1,439 @@
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ========================================
+   头部（与知识库统一）
+   ======================================== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 !important;
+  color: #e0e0e0 !important;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ========================================
+   大类别：项目类型筛选（与知识库统一）
+   ======================================== */
+.typeSection {
+  margin-bottom: 20px;
+}
+
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
+
+.typeTabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.typeTab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+.typeTab:hover {
+  border-color: #555;
+  color: #fff;
+  background: #222;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.typeTabActive {
+  color: #fff !important;
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.typeIcon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.typeLabel {
+  flex: 1;
+  font-weight: 500;
+}
+
+.typeCount {
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.typeTabActive .typeCount {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ========================================
+   小类别：统计条（对应知识库的分类栏）
+   ======================================== */
+.statsSection {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #161616;
+  border-radius: 10px;
+  border: 1px solid #222;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.statsLeft {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.statChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.04);
+  color: #888;
+  font-size: 13px;
+}
+
+.statChipValue {
+  font-weight: 600;
+  color: #bbb;
+}
+
+/* ========================================
+   搜索栏（与知识库统一）
+   ======================================== */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.searchInput {
+  max-width: 400px;
+  background: #1e1e1e !important;
+  border-color: #333 !important;
+}
+
+.searchInput input {
+  background: transparent !important;
+  color: #e0e0e0 !important;
+}
+
+/* ========================================
+   项目卡片网格（与知识库卡片统一风格）
+   ======================================== */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.projectCard {
+  background: #1e1e1e !important;
+  border: 1px solid #2a2a2a !important;
+  border-radius: 12px !important;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.projectCard:hover {
+  border-color: #444 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.projectCard :global(.ant-card-body) {
+  padding: 16px !important;
+}
+
+.cardBody {
+  /* 点击区域 */
+}
+
+.projectCard :global(.ant-card-actions) {
+  background: #161616 !important;
+  border-top: 1px solid #2a2a2a !important;
+  border-radius: 0 0 12px 12px !important;
+}
+
+.projectCard :global(.ant-card-actions > li) {
+  color: #666 !important;
+  transition: color 0.2s;
+}
+
+.projectCard :global(.ant-card-actions > li:hover) {
+  color: #4096ff !important;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.projectNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.projectTypeIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.projectName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.silIcon {
+  color: #52c41a;
+  font-size: 14px;
+}
+
+.noSilIcon {
+  color: #faad14;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.noSilIcon:hover {
+  color: #ffc53d;
+}
+
+.deleteBtn {
+  color: #555;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 0.2s;
+}
+
+.deleteBtn:hover {
+  color: #ff4d4f;
+}
+
+.projectMeta {
+  margin-bottom: 8px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.description {
+  color: #888 !important;
+  font-size: 13px;
+  margin-bottom: 12px !important;
+  min-height: 40px;
+  line-height: 1.5;
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid #2a2a2a;
+}
+
+.docCount {
+  color: #888;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lastUpdate {
+  color: #666;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cardTags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  overflow: hidden;
+  max-height: 22px;
+}
+
+.cardTag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #666;
+}
+
+/* ========================================
+   空状态
+   ======================================== */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+}
+
+/* ========================================
+   详情抽屉
+   ======================================== */
+.detailContent {
+  padding: 0;
+}
+
+.detailSection {
+  margin-bottom: 16px;
+}
+
+.detailSection h4 {
+  margin-bottom: 8px;
+  color: #e0e0e0;
+}
+
+/* ========================================
+   同步进度条 - 顶部居中样式
+   ======================================== */
+.syncProgressPopup {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 360px;
+  min-width: 260px;
+  background: rgba(22, 27, 34, 0.95);
+  border-radius: 12px;
+  border: 1px solid #333;
+  padding: 12px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 99999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.syncProgressHeader {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.syncProgressBar {
+  height: 4px;
+  background: #2a3f5f;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.syncProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #1677ff, #52c41a);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.syncProgressFile {
+  font-size: 12px;
+  color: #8b949e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.syncProgressCount {
+  font-size: 12px;
+  color: #58a6ff;
+  text-align: right;
+}
+
+/* ========================================
+   响应式
+   ======================================== */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .searchInput {
+    max-width: 100%;
+  }
+
+  .headerActions {
+    flex-wrap: wrap;
+  }
+  
+  .syncProgressPopup {
+    max-width: 90vw;
+    min-width: 200px;
+  }
+}

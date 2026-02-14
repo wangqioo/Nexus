@@ -1,0 +1,117 @@
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 !important;
+  color: #fff !important;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  flex: 1;
+  max-width: 400px;
+}
+
+.typeFilter {
+  min-width: 150px;
+}
+
+.stats {
+  margin-bottom: 16px;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.group {
+  padding: 16px;
+  background: #0d0d0d;
+  border-radius: 8px;
+  border: 1px solid #1f1f1f;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.peripheralCard {
+  background: #141414 !important;
+  border: 1px solid #262626 !important;
+}
+
+.peripheralCard:hover {
+  border-color: #303030 !important;
+}
+
+.peripheralCard :global(.ant-card-body) {
+  padding: 12px;
+}
+
+.peripheralCard :global(.ant-card-actions) {
+  background: #0d0d0d;
+  border-top: 1px solid #1f1f1f;
+}
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.peripheralName {
+  font-size: 14px;
+}
+
+.interfaceInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manufacturer {
+  font-size: 12px;
+}
+
+.empty {
+  margin-top: 80px;
+}
+
+.wiringSection {
+  margin: 16px 0;
+  padding: 12px;
+  background: #0d0d0d;
+  border-radius: 8px;
+}
+
+.wiringSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.formActions {
+  margin-bottom: 0;
+  margin-top: 24px;
+  text-align: right;
+}

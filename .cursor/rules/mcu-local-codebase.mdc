@@ -1,0 +1,138 @@
+---
+description: 本地 MCU 代码库参考 - 完整项目索引
+alwaysApply: true
+---
+
+# MCU 代码库索引
+
+## 新项目工作区
+
+**所有新项目创建在 `/Users/wq/Workshop/MCU/` 下：**
+
+```
+/Users/wq/Workshop/MCU/
+├── ESP32-S3/      ├── ESP32-P4/
+├── ESP32-C5/      ├── ESP32-C6/
+├── SF32LB5xx/     ├── STM32/
+├── K230/          ├── RK3588/
+└── _templates/
+```
+
+---
+
+## ESP32-S3 项目 (10+)
+
+### flickering_candlelight - LED 矩阵效果集
+**路径**: `/Users/wq/flickering_candlelight/`
+
+| 子项目 | 功能 | 关键代码 |
+|--------|------|----------|
+| `esp32s3_dual_effect` | 四效果切换（摇晃切换） | `candle_effect.c`, `water_effect.c`, `flow_effect.c` |
+| `esp32s3_candlelight_imu` | 火焰+IMU倾斜 | `candle_effect.c`, `qmi8658.c` |
+| `esp32s3_water_wave` | 水波效果 | `water_effect.c` |
+| `esp32s3_antigravity` | 反重力水波 | `water_effect.c`, `qmi8658.c` |
+| `esp32s3_matrix_game` | 倾斜控制游戏 | `main.c`, `qmi8658.c` |
+| `esp32s3_matrix_rainbow` | 彩虹渐变 | `main.c` |
+
+**通用组件**: `ws2812_matrix.c` (WS2812驱动), `qmi8658.c` (IMU驱动)
+
+### esp-spot - IMU 手势库
+**路径**: `/Users/wq/esp32_c5_imu/esp-spot/example/`
+
+| 示例 | 功能 |
+|------|------|
+| `imu_led` | IMU 控制 LED |
+| `bmi270_basic_examples/shake` | 摇晃检测 |
+| `bmi270_basic_examples/rotation` | 旋转检测 |
+| `bmi270_basic_examples/circle_gesture` | 圆形手势 |
+| `bmi270_basic_examples/multi_tap` | 多点触击 |
+| `adf/llm_touch_toy` | LLM 触摸玩具 |
+| `adf/touch_play_mp3` | 触摸播放音频 |
+
+### xiaozhi-esp32 - 小智 AI
+**路径**: `/Users/wq/xiaozhi-project/xiaozhi-esp32/`
+**功能**: AI 语音助手（支持 ESP32-S3/P4/C5/C6）
+
+---
+
+## ESP32-P4 项目 (14)
+
+**路径**: `/Users/wq/ESP32-P4-WIFI6-Touch-LCD-4B/`
+
+| 示例 | 功能 | 关键文件 |
+|------|------|----------|
+| `08_lvgl_display_panel` | MIPI DSI 显示 | `main/main.c` |
+| `09_lvgl_demo_v8` | LVGL v8 | `main/main.c` |
+| `10_lvgl_demo_v9` | LVGL v9 | `main/main.c` |
+| `11_esp_brookesia_phone` | 手机UI+人脸检测 | `main/main.cpp` |
+| `12_usb_extend_screen` | USB 扩展屏 | `main/app_uac.c` |
+| `06_I2SCodec` | ES8311 音频 | `i2s_es8311_example.c` |
+| `05_wifistation` | WiFi6 连接 | `station_example_main.c` |
+| `13_ethernetbasic` | 以太网 | `main/` |
+| `04_sdmmc` | SD 卡 | `main/` |
+| `03_i2c_tools` | I2C 工具 | `main/` |
+
+---
+
+## ESP32-C5 项目
+
+**路径**: `/Users/wq/esp32_c5_imu/esp-spot/example/`
+
+| 示例 | 功能 |
+|------|------|
+| `workout_pushpull` | BMI270 推拉检测 |
+| `espnow_ctrl_demo/gesture_ctrl_led_strip/tap_ctrl` | ESP-NOW 点击控灯 |
+| `espnow_ctrl_demo/gesture_ctrl_led_strip/rotate_ctrl` | ESP-NOW 旋转控灯 |
+| `any_wake_deepsleep` | 运动唤醒深睡眠 |
+
+---
+
+## SF32LB5xx (SiFli RT-Thread) - 100+ 示例
+
+**路径**: `/Users/wq/OpenSiFli/sifli-sdk/`
+
+| 类别 | 示例路径 | 功能 |
+|------|----------|------|
+| 基础 | `example/uart/` | UART 通信 |
+| 基础 | `example/rt_device/gpio/` | GPIO 驱动 |
+| 多媒体 | `example/multimedia/lvgl/lvgl_v8_demos/` | LVGL v8 演示 |
+| 多媒体 | `example/multimedia/lvgl/lvgl_v9_demos/` | LVGL v9 演示 |
+| 多媒体 | `example/multimedia/audio/local_music/` | MP3 播放 |
+| 多核 | `example/multicore/rpmsg-lite/` | HCPU/LCPU 通信 |
+| 蓝牙 | `example/ble/lcpu_general/` | BLE 通用示例 |
+| 蓝牙 | `example/bt/spp/` | BT SPP |
+| 存储 | `example/storage/flashdb/` | FlashDB |
+| 电源 | `example/pm/ble/` | BLE 低功耗 |
+
+**支持芯片**: SF32LB52x, SF32LB55x, SF32LB56x, SF32LB58x
+**构建系统**: SCons (`SConstruct`)
+
+---
+
+## 其他平台
+
+### RK3566
+**路径**: `/Users/wq/linux/rk3566_animated_face/`
+**功能**: Cairo 动态表情系统
+
+### K230 (预留)
+**路径**: `/Users/wq/k230_Claude/esp32_dual_foc_gimbal/`
+**功能**: ESP32 双电机云台，K230 串口协议预留
+
+### InkTime (Python)
+**路径**: `/Users/wq/InkTime/`
+**功能**: 墨水屏图像处理、Floyd-Steinberg 抖动
+
+---
+
+## 快速查找
+
+| 需求 | 路径 |
+|------|------|
+| WS2812 LED | `flickering_candlelight/*/main/ws2812_matrix.c` |
+| QMI8658 IMU | `flickering_candlelight/*/main/qmi8658.c` |
+| BMI270 手势 | `esp32_c5_imu/esp-spot/example/bmi270_basic_examples/` |
+| MIPI DSI LCD | `ESP32-P4-WIFI6-Touch-LCD-4B/08_lvgl_display_panel/` |
+| ES8311 音频 | `ESP32-P4-WIFI6-Touch-LCD-4B/06_I2SCodec/` |
+| SiFli LVGL | `OpenSiFli/sifli-sdk/example/multimedia/lvgl/` |
+| 图像抖动 | `InkTime/render_daily_photo.py` |

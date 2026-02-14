@@ -1,0 +1,202 @@
+{
+  "project_name": "esp32_c5_imu",
+  "project_path": "/Users/wq/esp32_c5_imu",
+  "analysis_date": "2025-02-13",
+
+  "1_chip_and_framework": {
+    "main_chips": ["ESP32-C5", "ESP32-S3"],
+    "primary_target": "ESP32-C5",
+    "framework": "ESP-IDF (Espressif IoT Development Framework)",
+    "framework_version": ">=5.0 (imu_led), >=5.3 (bmi270_basic_examples)",
+    "idf_version_recommended": "5.4+ (per CLAUDE.md)",
+    "target_config": {
+      "esp32c5": {
+        "flash_size": "8MB (typical), 16MB (SensairShuttle)",
+        "psram": "8MB (SensairShuttle N16R8)",
+        "wireless": ["2.4/5GHz Wi-Fi 6 (802.11ax)", "Bluetooth 5 LE", "Zigbee", "Thread"]
+      },
+      "esp32s3": {
+        "flash_size": "16MB",
+        "features": ["Touch/proximity sensing", "USB Serial JTAG"]
+      }
+    },
+    "rtos": "FreeRTOS",
+    "supported_boards": [
+      "ESP SPOT C5 (default for ESP32-C5)",
+      "ESP SPOT S3",
+      "ESP ASTOM S3",
+      "ESP ECHOEAR S3",
+      "ESP-SensairShuttle v1.0"
+    ]
+  },
+
+  "2_peripherals": {
+    "imu": {
+      "sensor": "Bosch BMI270",
+      "description": "6-axis IMU (3-axis accelerometer + 3-axis gyroscope)",
+      "interface": "I2C (also supports SPI)",
+      "capabilities": [
+        "加速度计 ±16G, 200Hz ODR",
+        "陀螺仪 ±2000dps, 200Hz ODR",
+        "Any-motion detection",
+        "Shake detection",
+        "Rotation angle detection",
+        "Wrist gesture recognition",
+        "Multi-tap (single/double/triple)",
+        "Circle gesture",
+        "Push/Pull motion",
+        "Toy motion (push in air, push on table, rolling)"
+      ]
+    },
+    "optional_magnetometer": {
+      "sensor": "BMM350",
+      "description": "3-axis magnetometer",
+      "interface": "I2C"
+    },
+    "led": {
+      "type": "WS2812 RGB LED / LED strip",
+      "interface": "SPI (RMT for single LED in imu_led)",
+      "config": {
+        "imu_led_example": {
+          "gpio": 27,
+          "count": 1,
+          "model": "WS2812",
+          "bus": "SPI2_HOST"
+        }
+      }
+    },
+    "i2c": {
+      "usage": "IMU (BMI270) communication",
+      "frequency": "100kHz",
+      "esp32c5_pins": { "scl": 26, "sda": 25 },
+      "esp32s3_pins": { "scl": 1, "sda": 2 },
+      "software_i2c": "Used on ESP SPOT C5/S3 (I2C_NUM_SW_1)"
+    },
+    "gpio": {
+      "esp32c5_imu": { "int_pin": 3, "scl": 26, "sda": 25 },
+      "esp32s3_imu": { "int_pin": 5, "scl": 1, "sda": 2 }
+    }
+  },
+
+  "3_key_config_files": {
+    "sdkconfig": {
+      "imu_led": "esp-spot/example/imu_led/sdkconfig.defaults",
+      "bmi270_esp32c5": "esp-spot/example/bmi270_basic_examples/*/sdkconfig.defaults.esp32c5"
+    },
+    "sdkconfig_defaults_content": {
+      "esp32c5_example": {
+        "CONFIG_IDF_TARGET": "esp32c5",
+        "CONFIG_ESPTOOLPY_FLASHSIZE_8MB": "y",
+        "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG": "y",
+        "CONFIG_BOARD_ESP_SPOT_C5": "y"
+      }
+    },
+    "cmake": [
+      "esp-spot/example/imu_led/CMakeLists.txt",
+      "esp-spot/example/bmi270_basic_examples/*/CMakeLists.txt"
+    ],
+    "idf_component": {
+      "imu_led": {
+        "path": "esp-spot/example/imu_led/main/idf_component.yml",
+        "dependencies": {
+          "idf": ">=5.0",
+          "espressif2022/bmi270": "^1.1.0",
+          "espressif/led_strip": "^3.0.0"
+        }
+      },
+      "bmi270_examples": {
+        "path": "esp-spot/example/bmi270_basic_examples/any_motion/main/idf_component.yml",
+        "dependencies": {
+          "bmi270_sensor": "*",
+          "idf": ">=5.3"
+        }
+      }
+    },
+    "kconfig": {
+      "path_pattern": "**/main/Kconfig.projbuild",
+      "features": [
+        "Board selection (ESP SPOT C5/S3, ASTOM, ECHOEAR, Custom)",
+        "Custom GPIO config (I2C pins, interrupt, software I2C)"
+      ]
+    }
+  },
+
+  "4_code_snippets": {
+
+    "imu_driver_init": {
+      "description": "BMI270 I2C 初始化与传感器创建",
+      "source_file": "esp-spot/example/imu_led/main/main.c",
+      "code": "static esp_err_t i2c_sensor_bmi270_init(void)\n{\n    const i2c_config_t i2c_bus_conf = {\n        .mode = I2C_MODE_MASTER,\n        .sda_io_num = I2C_MASTER_SDA_IO,\n        .sda_pullup_en = GPIO_PULLUP_ENABLE,\n        .scl_io_num = I2C_MASTER_SCL_IO,\n        .scl_pullup_en = GPIO_PULLUP_ENABLE,\n        .master.clk_speed = I2C_MASTER_FREQ_HZ\n    };\n    i2c_bus = i2c_bus_create(I2C_NUM_0, &i2c_bus_conf);\n    bmi270_i2c_config_t i2c_bmi270_conf = {\n        .i2c_handle = i2c_bus,\n        .i2c_addr = BMI270_I2C_ADDRESS,\n    };\n    bmi270_sensor_create(&i2c_bmi270_conf, &bmi_handle);\n    return ESP_OK;\n}"
+    },
+
+    "bmi270_toy_init": {
+      "description": "BMI270 Toy固件模式初始化（用于 any_motion/shake 等）",
+      "source_file": "esp-spot/example/bmi270_basic_examples/any_motion/main/any_motion_main.c",
+      "code": "esp_err_t ret = bmi270_sensor_create(i2c_bus, &bmi_handle, bmi270_toy_config_file, 0);"
+    },
+
+    "accel_gyro_config": {
+      "description": "加速度计与陀螺仪参数配置（含滤波配置）",
+      "source_file": "esp-spot/example/bmi270_basic_examples/any_motion/main/any_motion_main.c",
+      "code": "config[BMI2_ACCEL].cfg.acc.odr = BMI2_ACC_ODR_200HZ;\nconfig[BMI2_ACCEL].cfg.acc.range = BMI2_ACC_RANGE_16G;\nconfig[BMI2_ACCEL].cfg.acc.bwp = BMI2_ACC_NORMAL_AVG4;\nconfig[BMI2_ACCEL].cfg.acc.filter_perf = BMI2_PERF_OPT_MODE;\nconfig[BMI2_GYRO].cfg.gyr.odr = BMI2_GYR_ODR_200HZ;\nconfig[BMI2_GYRO].cfg.gyr.range = BMI2_GYR_RANGE_2000;\nconfig[BMI2_GYRO].cfg.gyr.bwp = BMI2_GYR_NORMAL_MODE;\nconfig[BMI2_GYRO].cfg.gyr.noise_perf = BMI2_PERF_OPT_MODE;\nconfig[BMI2_GYRO].cfg.gyr.filter_perf = BMI2_PERF_OPT_MODE;"
+    },
+
+    "gpio_isr_handler": {
+      "description": "BMI270 中断引脚 GPIO ISR",
+      "source_file": "esp-spot/example/bmi270_basic_examples/any_motion/main/any_motion_main.c",
+      "code": "static void IRAM_ATTR gpio_isr_edge_handler(void* arg)\n{\n    uint32_t gpio_num = (uint32_t) arg;\n    interrupt_status = true;\n    esp_rom_printf(\"GPIO[%\"PRIu32\"] intr, val: %d\\n\", gpio_num, gpio_get_level(gpio_num));\n}"
+    },
+
+    "wrist_gesture_recognition": {
+      "description": "手腕手势识别并控制LED",
+      "source_file": "esp-spot/example/imu_led/main/main.c",
+      "code": "uint8_t sens_list[] = {BMI2_ACCEL, BMI2_WRIST_GESTURE};\nbmi270_sensor_enable(sens_list, 2, bmi_handle);\nbmi270_get_feature_data(&sens_data, 1, bmi_handle);\nint gesture = sens_data.sens_data.wrist_gesture_output;\n// gesture_output: unknown, push_arm_down, pivot_up, wrist_shake_jiggle, flick_in, flick_out"
+    },
+
+    "rotation_parameter_adjust": {
+      "description": "旋转检测静态阈值调参（滤波/灵敏度）",
+      "source_file": "esp-spot/example/bmi270_basic_examples/rotation/main/rotation_main.c",
+      "code": "uint16_t static_threshold = 0x0014;  // 灵敏：桌面放置\n// 0x0080 更稳：手持场景\ndata[0] = static_threshold & 0xff;\ndata[1] = (static_threshold >> 8) & 0xff;\nbmi2_set_regs(0x3a, data, 2, bmi2_dev);"
+    },
+
+    "led_strip_config": {
+      "description": "WS2812 LED 灯带配置 (SPI)",
+      "source_file": "esp-spot/example/imu_led/main/main.c",
+      "code": "led_strip_config_t strip_config = {\n    .strip_gpio_num = WS2812_GPIO,\n    .max_leds = 1,\n    .led_model = LED_MODEL_WS2812,\n    .color_component_format = { ... },\n};\nled_strip_spi_config_t spi_config = {\n    .clk_src = SPI_CLK_SRC_DEFAULT,\n    .spi_bus = SPI2_HOST,\n    .flags = {.with_dma = true}\n};\nled_strip_new_spi_device(&strip_config, &spi_config, &led_strip);"
+    }
+  },
+
+  "5_filter_and_algorithm_notes": {
+    "sensor_internal_filter": {
+      "accel": {
+        "bwp": "BMI2_ACC_NORMAL_AVG4 (4点平均)",
+        "filter_perf": "BMI2_PERF_OPT_MODE"
+      },
+      "gyro": {
+        "bwp": "BMI2_GYR_NORMAL_MODE",
+        "noise_perf": "BMI2_PERF_OPT_MODE or BMI2_POWER_OPT_MODE",
+        "filter_perf": "BMI2_PERF_OPT_MODE"
+      }
+    },
+    "application_level": {
+      "rotation_static_threshold": "寄存器 0x3a 控制旋转检测静态阈值，影响灵敏度",
+      "note": "项目未包含自定义软件滤波（如卡尔曼、互补滤波），BMI270 内置算法与固件提供动作识别"
+    }
+  },
+
+  "6_example_summary": {
+    "imu_led": "BMI270 手腕手势 + WS2812 LED 反馈",
+    "bmi270_basic_examples": [
+      "any_motion - 任意运动检测",
+      "shake - 摇晃检测",
+      "rotation - 旋转角度检测",
+      "multi_tap - 单击/双击/三击",
+      "circle_gesture - 画圆手势",
+      "push_in_air / push_on_table - 推压检测",
+      "rolling - 滚动检测",
+      "toy_motion - 玩具动作综合"
+    ],
+    "workout_pushpull": "推拉动作计数（健身）",
+    "xiaozhi_wakeword_up": "小智语音唤醒 + IMU 姿态（roll/push）"
+  }
+}

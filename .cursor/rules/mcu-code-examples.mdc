@@ -1,0 +1,302 @@
+---
+description: MCU 代码示例 - 来自本地项目的实际可用代码
+globs: "**/*.{c,cpp,h,py}"
+alwaysApply: false
+---
+
+# MCU 代码示例库
+
+以下代码来自 `/Users/wq/` 下的真实项目，可直接参考使用。
+
+---
+
+## WS2812 LED 矩阵
+
+**来源**: `/Users/wq/flickering_candlelight/esp32s3_dual_effect/main/ws2812_matrix.c`
+
+### 初始化 (ESP-IDF RMT)
+
+```c
+#include "led_strip.h"
+
+static led_strip_handle_t led_strip = NULL;
+
+esp_err_t matrix_init(void) {
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = GPIO_NUM_14,      // 数据引脚
+        .max_leds = 64,                      // 8x8 = 64
+        .led_pixel_format = LED_PIXEL_FORMAT_GRB,
+        .led_model = LED_MODEL_WS2812,
+    };
+    
+    led_strip_rmt_config_t rmt_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = 10 * 1000 * 1000,  // 10MHz
+    };
+    
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+    return ESP_OK;
+}
+```
+
+### 设置像素颜色
+
+```c
+void matrix_set_pixel(uint8_t row, uint8_t col, uint8_t r, uint8_t g, uint8_t b) {
+    int index = row * 8 + col;
+    // WS2812 是 GRB 格式，但 led_strip API 已处理
+    led_strip_set_pixel(led_strip, index, r, g, b);
+}
+
+esp_err_t matrix_refresh(void) {
+    return led_strip_refresh(led_strip);
+}
+```
+
+---
+
+## QMI8658 IMU 传感器
+
+**来源**: `/Users/wq/flickering_candlelight/esp32s3_dual_effect/main/qmi8658.c`
+
+### I2C 初始化
+
+```c
+#include "driver/i2c.h"
+
+#define QMI8658_ADDR    0x6B
+#define I2C_SDA         GPIO_NUM_11
+#define I2C_SCL         GPIO_NUM_12
+
+esp_err_t qmi8658_init(void) {
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = I2C_SDA,
+        .scl_io_num = I2C_SCL,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = 400000,  // 400kHz
+    };
+    ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &conf));
+    ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
+    
+    // 软复位
+    qmi8658_write_reg(0x60, 0xB0);
+    vTaskDelay(pdMS_TO_TICKS(20));
+    
+    // 配置加速度计: 4G 量程, 1000Hz
+    qmi8658_write_reg(0x03, 0x25);  // CTRL2
+    // 使能传感器
+    qmi8658_write_reg(0x08, 0x03);  // CTRL7
+    
+    return ESP_OK;
+}
+```
+
+### 读取加速度
+
+```c
+esp_err_t qmi8658_read_accel(float *x, float *y, float *z) {
+    uint8_t raw[6];
+    qmi8658_read_reg(0x35, raw, 6);  // AX_L 起始地址
+    
+    int16_t ax = (raw[1] << 8) | raw[0];
+    int16_t ay = (raw[3] << 8) | raw[2];
+    int16_t az = (raw[5] << 8) | raw[4];
+    
+    // 4G 量程: 8192 LSB/g
+    *x = ax / 8192.0f;
+    *y = ay / 8192.0f;
+    *z = az / 8192.0f;
+    return ESP_OK;
+}
+```
+
+---
+
+## 火焰效果算法
+
+**来源**: `/Users/wq/flickering_candlelight/esp32s3_dual_effect/main/candle_effect.c`
+
+```c
+#define FIRE_WIDTH  8
+#define FIRE_HEIGHT 10
+static uint8_t fire_buffer[FIRE_HEIGHT][FIRE_WIDTH];
+
+void candle_update(float tilt_x) {
+    // 1. 底部热源 (烛芯位置)
+    for (int x = 0; x < FIRE_WIDTH; x++) {
+        if (x >= 2 && x <= 5) {  // 中间区域
+            fire_buffer[FIRE_HEIGHT-1][x] = 220 + (esp_random() % 35);
+        }
+    }
+    
+    // 2. 热量向上传播 + 衰减
+    for (int y = 0; y < FIRE_HEIGHT - 2; y++) {
+        for (int x = 0; x < FIRE_WIDTH; x++) {
+            int offset_x = x + (int)(tilt_x * 1.2f);  // IMU 倾斜影响
+            if (offset_x < 0) offset_x = 0;
+            if (offset_x >= FIRE_WIDTH) offset_x = FIRE_WIDTH - 1;
+            
+            int heat = fire_buffer[y+1][offset_x];
+            int decay = 12 + (y * 5);
+            int flicker = (esp_random() % 30) - 15;
+            
+            fire_buffer[y][x] = MAX(0, heat - decay + flicker);
+        }
+    }
+    
+    // 3. 映射到 LED
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            uint8_t heat = fire_buffer[FIRE_HEIGHT - 1 - y][x];
+            matrix_set_pixel_brightness(y, x, heat);
+        }
+    }
+    matrix_refresh();
+}
+```
+
+---
+
+## Floyd-Steinberg 抖动 (墨水屏)
+
+**来源**: `/Users/wq/InkTime/render_daily_photo.py`
+
+```python
+from PIL import Image
+
+PALETTE = [
+    (0, 0, 0),         # 黑
+    (255, 255, 255),   # 白
+    (200, 0, 0),       # 红
+    (220, 180, 0),     # 黄
+    (0, 180, 0),       # 绿
+    (0, 0, 200),       # 蓝
+]
+
+def nearest_color(r, g, b):
+    min_dist = float('inf')
+    best = 0
+    for i, (pr, pg, pb) in enumerate(PALETTE):
+        dist = (r-pr)**2 + (g-pg)**2 + (b-pb)**2
+        if dist < min_dist:
+            min_dist, best = dist, i
+    return best, PALETTE[best]
+
+def floyd_steinberg_dither(img: Image.Image) -> Image.Image:
+    img = img.convert('RGB')
+    pixels = img.load()
+    w, h = img.size
+    
+    for y in range(h):
+        for x in range(w):
+            old_r, old_g, old_b = pixels[x, y]
+            idx, (new_r, new_g, new_b) = nearest_color(old_r, old_g, old_b)
+            pixels[x, y] = (new_r, new_g, new_b)
+            
+            # 误差
+            err_r, err_g, err_b = old_r - new_r, old_g - new_g, old_b - new_b
+            
+            # 扩散 (7/16, 3/16, 5/16, 1/16)
+            for dx, dy, f in [(1,0,7/16), (-1,1,3/16), (0,1,5/16), (1,1,1/16)]:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h:
+                    pr, pg, pb = pixels[nx, ny]
+                    pixels[nx, ny] = (
+                        max(0, min(255, int(pr + err_r * f))),
+                        max(0, min(255, int(pg + err_g * f))),
+                        max(0, min(255, int(pb + err_b * f)))
+                    )
+    return img
+```
+
+---
+
+---
+
+## ES8311 音频编解码器
+
+**来源**: `/Users/wq/ESP32-P4-WIFI6-Touch-LCD-4B/06_I2SCodec/main/i2s_es8311_example.c`
+
+### I2S + ES8311 初始化
+
+```c
+#include "driver/i2s_std.h"
+#include "es8311.h"
+
+static i2s_chan_handle_t tx_handle = NULL;
+static i2s_chan_handle_t rx_handle = NULL;
+
+// ES8311 Codec 初始化
+esp_err_t es8311_codec_init(void) {
+    // I2C 配置
+    const i2c_config_t es_i2c_cfg = {
+        .sda_io_num = I2C_SDA_IO,
+        .scl_io_num = I2C_SCL_IO,
+        .mode = I2C_MODE_MASTER,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = 100000,
+    };
+    i2c_param_config(I2C_NUM_0, &es_i2c_cfg);
+    i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+    
+    // 创建 ES8311 句柄
+    es8311_handle_t es_handle = es8311_create(I2C_NUM_0, ES8311_ADDRRES_0);
+    
+    // 时钟配置
+    const es8311_clock_config_t es_clk = {
+        .mclk_from_mclk_pin = true,
+        .mclk_frequency = 12288000,  // 12.288MHz
+        .sample_frequency = 16000     // 16kHz
+    };
+    es8311_init(es_handle, &es_clk, ES8311_RESOLUTION_16, ES8311_RESOLUTION_16);
+    es8311_voice_volume_set(es_handle, 70, NULL);
+    
+    return ESP_OK;
+}
+
+// I2S 驱动初始化
+esp_err_t i2s_driver_init(void) {
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.auto_clear = true;
+    i2s_new_channel(&chan_cfg, &tx_handle, &rx_handle);
+    
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+        .gpio_cfg = {
+            .mclk = I2S_MCK_IO,
+            .bclk = I2S_BCK_IO,
+            .ws = I2S_WS_IO,
+            .dout = I2S_DO_IO,
+            .din = I2S_DI_IO,
+        },
+    };
+    
+    i2s_channel_init_std_mode(tx_handle, &std_cfg);
+    i2s_channel_init_std_mode(rx_handle, &std_cfg);
+    i2s_channel_enable(tx_handle);
+    i2s_channel_enable(rx_handle);
+    
+    return ESP_OK;
+}
+```
+
+---
+
+## 更多代码索引
+
+| 功能 | 文件路径 |
+|------|----------|
+| MIPI DSI LCD | `/Users/wq/ESP32-P4-WIFI6-Touch-LCD-4B/08_lvgl_display_panel/main/` |
+| USB 扩展屏 | `/Users/wq/ESP32-P4-WIFI6-Touch-LCD-4B/12_usb_extend_screen/main/` |
+| BMI270 手势 | `/Users/wq/esp32_c5_imu/esp-spot/example/bmi270_basic_examples/` |
+| ESP-NOW 控灯 | `/Users/wq/esp32_c5_imu/esp-spot/example/espnow_ctrl_demo/` |
+| LLM 玩具 | `/Users/wq/esp32_c5_imu/esp-spot/example/adf/llm_touch_toy/` |
+| 小智 ESP32 | `/Users/wq/xiaozhi-project/xiaozhi-esp32/` |
+| SiFli LVGL | `/Users/wq/OpenSiFli/sifli-sdk/example/multimedia/lvgl/` |
+| SiFli 音频 | `/Users/wq/OpenSiFli/sifli-sdk/example/multimedia/audio/` |
+| SiFli BLE | `/Users/wq/OpenSiFli/sifli-sdk/example/ble/` |
+| RK3566 表情 | `/Users/wq/linux/rk3566_animated_face/src/` |

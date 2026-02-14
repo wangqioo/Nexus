@@ -1,0 +1,117 @@
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 !important;
+  color: #fff !important;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.searchInput {
+  flex: 1;
+  max-width: 400px;
+}
+
+.categoryFilter {
+  min-width: 150px;
+}
+
+.categoryTags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.categoryTag {
+  cursor: pointer;
+}
+
+.stats {
+  margin-bottom: 16px;
+}
+
+.snippetCard {
+  height: 100%;
+  background: #141414 !important;
+  border: 1px solid #1f1f1f !important;
+}
+
+.snippetCard:hover {
+  border-color: #303030 !important;
+}
+
+.snippetCard :global(.ant-card-body) {
+  padding: 16px;
+}
+
+.snippetCard :global(.ant-card-actions) {
+  background: #0d0d0d;
+  border-top: 1px solid #1f1f1f;
+}
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.snippetName {
+  flex: 1;
+}
+
+.description {
+  color: #888 !important;
+  margin: 0 !important;
+  font-size: 13px;
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #1f1f1f;
+}
+
+.tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.empty {
+  margin-top: 80px;
+}
+
+.codeInput {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace !important;
+  font-size: 13px !important;
+}
+
+.formActions {
+  margin-bottom: 0;
+  margin-top: 24px;
+  text-align: right;
+}

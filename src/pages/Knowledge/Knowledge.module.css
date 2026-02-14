@@ -1,0 +1,365 @@
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 !important;
+  color: #e0e0e0 !important;
+}
+
+/* ========================================
+   区块标签（大类别/小类别共用标题）
+   ======================================== */
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
+
+.sectionLabelSub {
+  font-weight: 400;
+  color: #555;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ========================================
+   大类别：项目类型（突出、卡片式）
+   ======================================== */
+.typeSection {
+  margin-bottom: 20px;
+}
+
+.typeTabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.typeTab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid #333;
+  background: #1a1a1a;
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+.typeTab:hover {
+  border-color: #555;
+  color: #fff;
+  background: #222;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.typeTabActive {
+  color: #fff !important;
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.typeIcon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.typeLabel {
+  flex: 1;
+  font-weight: 500;
+}
+
+.typeCount {
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.typeTabActive .typeCount {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ========================================
+   小类别：知识分类（紧凑、标签式）
+   ======================================== */
+.categorySection {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #161616;
+  border-radius: 10px;
+  border: 1px solid #222;
+}
+
+.categoryBar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.categoryTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.04);
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.categoryTag:hover {
+  background: rgba(255,255,255,0.08);
+  color: #ccc;
+}
+
+.categoryTagActive {
+  background: rgba(22, 119, 255, 0.15) !important;
+  border-color: rgba(22, 119, 255, 0.4) !important;
+  color: #4096ff !important;
+  font-weight: 500;
+}
+
+.categoryCount {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+/* ========================================
+   工具栏（搜索）
+   ======================================== */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.searchInput {
+  max-width: 400px;
+  background: #1e1e1e !important;
+  border-color: #333 !important;
+}
+
+.searchInput input {
+  background: transparent !important;
+  color: #e0e0e0 !important;
+}
+
+/* ========================================
+   知识卡片网格
+   ======================================== */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 16px;
+}
+
+.knowledgeCard {
+  background: #1e1e1e !important;
+  border: 1px solid #2a2a2a !important;
+  border-radius: 12px !important;
+  cursor: pointer;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.knowledgeCard:hover {
+  border-color: #444 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardBadges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.typeBadge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 500;
+}
+
+.categoryBadge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #aaa;
+}
+
+.cardContent {
+  font-size: 13px;
+  color: #888;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  margin-bottom: 12px;
+  min-height: 58px;
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cardTags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  overflow: hidden;
+  max-height: 24px;
+}
+
+.cardTag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #777;
+}
+
+.cardDate {
+  font-size: 11px;
+  color: #555;
+  flex-shrink: 0;
+}
+
+/* ========================================
+   详情抽屉
+   ======================================== */
+.detailHeader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.detailContent {
+  line-height: 1.8;
+  color: #ddd;
+}
+
+.detailContent pre {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.detailContent code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.detailMeta {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #333;
+}
+
+/* ========================================
+   空状态
+   ======================================== */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.emptyIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+/* ========================================
+   严重程度
+   ======================================== */
+.severityDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+/* ========================================
+   未读标记
+   ======================================== */
+.unreadDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  background: #1677ff;
+  box-shadow: 0 0 6px #1677ff;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+}
