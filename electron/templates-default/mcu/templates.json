@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "knowledgeCategory": "mcu",
+  "templates": {
+    "debug": {
+      "id": "debug",
+      "name": "调试经验",
+      "icon": "BugOutlined",
+      "description": "记录 bug 修复过程和问题排查经验",
+      "fileExtension": ".md",
+      "frontmatterFields": [
+        {"name": "title", "label": "标题", "type": "text", "required": true, "placeholder": "问题简述"},
+        {"name": "tags", "label": "标签", "type": "tags", "required": false, "placeholder": "添加标签"},
+        {"name": "severity", "label": "严重程度", "type": "select", "required": false, "options": ["critical", "major", "minor", "trivial"], "default": "minor"},
+        {"name": "status", "label": "状态", "type": "select", "required": false, "options": ["resolved", "workaround", "investigating"], "default": "resolved"},
+        {"name": "platform", "label": "平台", "type": "text", "required": false, "placeholder": "如 ESP32-S3"},
+        {"name": "created", "label": "创建时间", "type": "date", "required": true}
+      ],
+      "contentTemplate": "## 问题描述\n<!-- 描述遇到的问题现象 -->\n\n## 错误信息\n```\n<!-- 粘贴错误日志 -->\n```\n\n## 根因分析\n<!-- 分析问题的根本原因 -->\n\n## 解决方案\n<!-- 详细描述解决步骤 -->\n\n## 相关代码\n```c\n// 修复后的代码\n```\n\n## 经验总结\n<!-- 这次问题带来的教训或经验 -->\n",
+      "aiPrompt": "请帮我记录这个调试经验。要求：\n1. 标题简洁明了，概括问题本质\n2. 问题描述要包含复现条件\n3. 根因分析要深入，不只是表面现象\n4. 解决方案要具体可操作\n5. 如果有代码修改，请包含关键代码片段\n6. 总结要提炼出可复用的经验"
+    },
+    "snippet": {
+      "id": "snippet",
+      "name": "代码片段",
+      "icon": "CodeOutlined",
+      "description": "保存可复用的代码模板",
+      "fileExtension": ".md",
+      "frontmatterFields": [
+        {"name": "title", "label": "标题", "type": "text", "required": true, "placeholder": "代码片段名称"},
+        {"name": "tags", "label": "标签", "type": "tags", "required": false, "placeholder": "添加标签"},
+        {"name": "language", "label": "编程语言", "type": "select", "required": true, "options": ["c", "cpp", "python", "javascript", "typescript", "rust", "go", "shell", "other"], "default": "c"},
+        {"name": "category", "label": "分类", "type": "select", "required": false, "options": ["driver", "algorithm", "utility", "config", "template", "other"], "default": "utility"},
+        {"name": "platform", "label": "适用平台", "type": "text", "required": false, "placeholder": "如 ESP-IDF, Arduino"},
+        {"name": "created", "label": "创建时间", "type": "date", "required": true}
+      ],
+      "contentTemplate": "## 功能说明\n<!-- 这段代码的作用 -->\n\n## 代码\n```c\n// 代码内容\n```\n\n## 使用方法\n<!-- 如何使用这段代码 -->\n\n## 依赖说明\n<!-- 需要的头文件、库等 -->\n\n## 注意事项\n<!-- 使用时需要注意的点 -->\n",
+      "aiPrompt": "请帮我保存这个代码片段。要求：\n1. 标题要清晰表达代码功能\n2. 功能说明简洁但完整\n3. 代码要有适当的注释\n4. 说明使用方法和参数\n5. 列出依赖的库或头文件\n6. 提醒使用时的注意事项"
+    },
+    "note": {
+      "id": "note",
+      "name": "开发笔记",
+      "icon": "FileTextOutlined",
+      "description": "记录学习心得和技术要点",
+      "fileExtension": ".md",
+      "frontmatterFields": [
+        {"name": "title", "label": "标题", "type": "text", "required": true, "placeholder": "笔记标题"},
+        {"name": "tags", "label": "标签", "type": "tags", "required": false, "placeholder": "添加标签"},
+        {"name": "category", "label": "分类", "type": "select", "required": false, "options": ["learning", "design", "issue", "summary", "reference"], "default": "learning"},
+        {"name": "created", "label": "创建时间", "type": "date", "required": true}
+      ],
+      "contentTemplate": "## 背景\n<!-- 为什么要记录这个 -->\n\n## 核心内容\n<!-- 主要知识点 -->\n\n## 示例\n<!-- 代码示例或实际案例 -->\n\n## 参考资料\n<!-- 相关链接或文档 -->\n",
+      "aiPrompt": "请帮我记录这个开发笔记。要求：\n1. 标题要能概括核心内容\n2. 说明记录的背景和目的\n3. 核心内容要条理清晰\n4. 如果有代码，请包含示例\n5. 附上相关的参考资料链接"
+    },
+    "config": {
+      "id": "config",
+      "name": "配置模板",
+      "icon": "SettingOutlined",
+      "description": "保存重要的配置文件",
+      "fileExtension": ".md",
+      "frontmatterFields": [
+        {"name": "title", "label": "标题", "type": "text", "required": true, "placeholder": "配置名称"},
+        {"name": "tags", "label": "标签", "type": "tags", "required": false, "placeholder": "添加标签"},
+        {"name": "configType", "label": "配置类型", "type": "select", "required": false, "options": ["build", "env", "device", "network", "other"], "default": "other"},
+        {"name": "platform", "label": "适用平台", "type": "text", "required": false, "placeholder": "如 ESP-IDF 5.x"},
+        {"name": "created", "label": "创建时间", "type": "date", "required": true}
+      ],
+      "contentTemplate": "## 配置说明\n<!-- 这个配置的作用 -->\n\n## 配置内容\n```\n# 配置文件内容\n```\n\n## 关键参数说明\n<!-- 重要参数的含义 -->\n\n## 使用场景\n<!-- 什么情况下使用这个配置 -->\n",
+      "aiPrompt": "请帮我保存这个配置模板。要求：\n1. 标题要清晰表达配置用途\n2. 说明配置的作用和适用场景\n3. 保留完整的配置内容\n4. 解释关键参数的含义\n5. 说明使用时需要修改的地方"
+    }
+  },
+  "settings": {"autoAddTimestamp": true, "defaultTags": [], "aiAnalysisEnabled": true},
+  "knowledgeCategories": [
+    {"id": "debug", "name": "调试经验", "icon": "🐛", "silDir": "debug"},
+    {"id": "snippet", "name": "代码片段", "icon": "📝", "silDir": "snippets"},
+    {"id": "config", "name": "配置模板", "icon": "⚙️", "silDir": "configs"},
+    {"id": "other", "name": "其他", "icon": "📁", "silDir": "other"}
+  ]
+}

@@ -8,7 +8,7 @@ import {
   SaveOutlined, ReloadOutlined, PlusOutlined, DeleteOutlined,
   BugOutlined, CodeOutlined, FileTextOutlined, SettingOutlined,
   QuestionCircleOutlined, EditOutlined, EyeOutlined, HistoryOutlined,
-  FolderOutlined, ClockCircleOutlined
+  FolderOutlined, ClockCircleOutlined, FolderOpenOutlined, KeyOutlined
 } from '@ant-design/icons'
 import type { NexusTemplateConfig, DocumentTemplate, TemplateField, TemplateVersionRecord, ProjectTemplateUsage } from '../../types'
 import { DEFAULT_TEMPLATE_CONFIG } from '../../types'
@@ -18,12 +18,13 @@ const { Title, Text, Paragraph } = Typography
 const { TextArea } = Input
 const { Panel } = Collapse
 
-// 模板类型图标映射
+// 模板类型图标映射（4 类知识 + 笔记库）
 const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
   debug: <BugOutlined />,
   snippet: <CodeOutlined />,
   note: <FileTextOutlined />,
   config: <SettingOutlined />,
+  other: <FolderOpenOutlined />,
 }
 
 // 字段类型选项
@@ -158,13 +159,13 @@ const TemplateEditor: React.FC<{
 
       <Divider style={{ margin: '16px 0' }} />
 
-      {/* Frontmatter 字段 */}
-      <Collapse defaultActiveKey={['fields']} ghost>
+      {/* 以下区块默认收起，需要时再展开 */}
+      <Collapse defaultActiveKey={[]} ghost>
         <Panel 
           header={
             <Space>
-              <Text strong>Frontmatter 字段</Text>
-              <Tag>{template.frontmatterFields.length} 个字段</Tag>
+              <Text strong>文档元数据字段</Text>
+              <Tag>{template.frontmatterFields.length} 个</Tag>
             </Space>
           } 
           key="fields"
@@ -189,11 +190,10 @@ const TemplateEditor: React.FC<{
           </div>
         </Panel>
 
-        {/* 内容模板 */}
         <Panel 
           header={
             <Space>
-              <Text strong>内容模板 (Markdown)</Text>
+              <Text strong>内容模板（Markdown 结构）</Text>
               <Button 
                 type="text" 
                 size="small"
@@ -221,12 +221,11 @@ const TemplateEditor: React.FC<{
           )}
         </Panel>
 
-        {/* AI Prompt */}
         <Panel 
           header={
             <Space>
               <Text strong>AI 生成指导</Text>
-              <Tooltip title="当用户让 AI 记录经验时，AI 会参考这个 prompt">
+              <Tooltip title="让 AI 记录经验时参考的说明">
                 <QuestionCircleOutlined style={{ color: '#888' }} />
               </Tooltip>
             </Space>
@@ -250,9 +249,29 @@ export function Settings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('debug')
+  const [apiKey, setApiKey] = useState('')
+  const [apiKeySaving, setApiKeySaving] = useState(false)
 
   useEffect(() => {
     loadConfig()
+  }, [])
+
+  useEffect(() => {
+    const local = localStorage.getItem('zhipu_api_key') || ''
+    setApiKey(local)
+    if (!local && typeof window.electronAPI?.readFile === 'function') {
+      window.electronAPI.readFile('config.json').then((raw: string | null) => {
+        if (raw) {
+          try {
+            const cfg = JSON.parse(raw)
+            if (cfg.zhipu_api_key) {
+              setApiKey(cfg.zhipu_api_key)
+              localStorage.setItem('zhipu_api_key', cfg.zhipu_api_key)
+            }
+          } catch (_) {}
+        }
+      })
+    }
   }, [])
 
   const loadConfig = async () => {
@@ -306,6 +325,27 @@ export function Settings() {
     })
   }
 
+  const handleSaveApiKey = async () => {
+    setApiKeySaving(true)
+    try {
+      localStorage.setItem('zhipu_api_key', apiKey)
+      if (typeof window.electronAPI?.readFile === 'function' && typeof window.electronAPI?.writeFile === 'function') {
+        let existing: Record<string, unknown> = {}
+        try {
+          const raw = await window.electronAPI.readFile('config.json')
+          if (raw) existing = JSON.parse(raw)
+        } catch (_) {}
+        existing.zhipu_api_key = apiKey || undefined
+        if (apiKey === '') delete existing.zhipu_api_key
+        await window.electronAPI.writeFile('config.json', JSON.stringify(existing, null, 2))
+      }
+      message.success(apiKey ? '智谱 API Key 已保存' : '已清除 API Key')
+    } catch (e) {
+      message.error('保存失败')
+    }
+    setApiKeySaving(false)
+  }
+
   const tabItems = Object.entries(config.templates).map(([id, template]) => ({
     key: id,
     label: (
@@ -327,7 +367,7 @@ export function Settings() {
       <div className={styles.header}>
         <div>
           <Title level={2} className={styles.title}>模板设置</Title>
-          <Text type="secondary">自定义 .nexus 目录中文档的格式和内容</Text>
+          <Text type="secondary">所有项目共用这一份配置；不改也能用，默认就够。</Text>
         </div>
         <Space>
           <Popconfirm
@@ -345,55 +385,59 @@ export function Settings() {
             onClick={handleSave}
             loading={saving}
           >
-            保存配置
+            保存
           </Button>
         </Space>
       </div>
 
+      {/* 智谱 API Key：分享给他人后对方需在此填写自己的 Key */}
+      <Card
+        title={
+          <Space>
+            <KeyOutlined />
+            <span>智谱 API Key</span>
+          </Space>
+        }
+        className={styles.card}
+        style={{ marginBottom: 20 }}
+      >
+        <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          用于项目 AI 分析、导入时分类与同步补全等。分享项目给他人时不会包含此 Key，对方需在
+          <a href="https://open.bigmodel.cn" target="_blank" rel="noopener noreferrer"> 智谱开放平台 </a>
+          申请自己的 Key 后在此填写。
+        </Paragraph>
+        <Space.Compact style={{ width: '100%', maxWidth: 480 }}>
+          <Input.Password
+            placeholder="填写后保存，不填则不使用 AI 功能"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            onPressEnter={handleSaveApiKey}
+          />
+          <Button type="primary" onClick={handleSaveApiKey} loading={apiKeySaving}>
+            保存
+          </Button>
+        </Space.Compact>
+      </Card>
+
       <Alert
         type="info"
         showIcon
-        message="模板配置说明"
-        description={
-          <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
-            <li><strong>Frontmatter 字段</strong>：定义文档的元数据字段（如标题、标签、分类等）</li>
-            <li><strong>内容模板</strong>：定义 Markdown 文档的结构</li>
-            <li><strong>AI 生成指导</strong>：当你让 AI 记录经验时，AI 会参考这个 prompt 生成内容</li>
-          </ul>
-        }
+        message="无需折腾"
+        description="大多数情况用默认即可，只需看下面「常用设置」里的两个开关；想改文档格式或 AI 提示时再点左侧「各类型模板」。"
         style={{ marginBottom: 20 }}
       />
 
-      <Card className={styles.card} loading={loading}>
-        <Tabs 
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={tabItems}
-          tabPosition="left"
-          className={styles.tabs}
-        />
-      </Card>
-
-      {/* 通用设置 */}
+      {/* 常用设置：优先展示，多数用户只动这里 */}
       <Card 
-        title="通用设置" 
+        title="常用设置" 
         className={styles.card}
-        style={{ marginTop: 20 }}
+        loading={loading}
       >
         <Form layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }}>
-          <Form.Item label="自动添加时间戳">
-            <Switch
-              checked={config.settings.autoAddTimestamp}
-              onChange={(checked) => setConfig({
-                ...config,
-                settings: { ...config.settings, autoAddTimestamp: checked }
-              })}
-            />
-            <Text type="secondary" style={{ marginLeft: 12 }}>
-              创建文档时自动添加 created 字段
-            </Text>
-          </Form.Item>
-          <Form.Item label="启用 AI 分析">
+          <Form.Item 
+            label="同步时用 AI 分析" 
+            extra="导入经验时让 AI 自动补全标题、标签等（需在上方配置智谱 API Key）"
+          >
             <Switch
               checked={config.settings.aiAnalysisEnabled}
               onChange={(checked) => setConfig({
@@ -401,11 +445,20 @@ export function Settings() {
                 settings: { ...config.settings, aiAnalysisEnabled: checked }
               })}
             />
-            <Text type="secondary" style={{ marginLeft: 12 }}>
-              同步时使用 AI 自动分析和补充文档
-            </Text>
           </Form.Item>
-          <Form.Item label="默认标签">
+          <Form.Item 
+            label="自动加时间" 
+            extra="新建文档时自动写入创建时间"
+          >
+            <Switch
+              checked={config.settings.autoAddTimestamp}
+              onChange={(checked) => setConfig({
+                ...config,
+                settings: { ...config.settings, autoAddTimestamp: checked }
+              })}
+            />
+          </Form.Item>
+          <Form.Item label="默认标签" extra="新建文档时可带的默认标签，不填也行">
             <Select
               mode="tags"
               value={config.settings.defaultTags}
@@ -413,11 +466,27 @@ export function Settings() {
                 ...config,
                 settings: { ...config.settings, defaultTags: tags }
               })}
-              placeholder="输入标签后按回车"
+              placeholder="输入后按回车"
               style={{ width: '100%' }}
             />
           </Form.Item>
         </Form>
+      </Card>
+
+      {/* 各类型模板：可选，需要改文档格式或 AI 提示时再点 */}
+      <Card 
+        title="各类型模板（可选）" 
+        extra={<Text type="secondary">只有想改文档格式或 AI 提示时再点下面标签</Text>}
+        className={styles.card}
+        style={{ marginTop: 20 }}
+      >
+        <Tabs 
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={tabItems}
+          tabPosition="left"
+          className={styles.tabs}
+        />
       </Card>
 
       {/* 版本历史与项目使用记录 */}

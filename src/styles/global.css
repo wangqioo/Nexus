@@ -202,6 +202,22 @@ code {
   border-bottom-color: var(--border-primary) !important;
 }
 
+.ant-modal-title {
+  color: var(--text-primary) !important;
+}
+
+.ant-modal-body {
+  color: var(--text-primary) !important;
+}
+
+.ant-modal-close-x {
+  color: var(--text-secondary) !important;
+}
+
+.ant-modal-close-x:hover {
+  color: var(--text-primary) !important;
+}
+
 .ant-modal-footer {
   border-top-color: var(--border-primary) !important;
 }
@@ -228,6 +244,10 @@ code {
   color: var(--text-primary) !important;
 }
 
+.ant-tooltip-arrow-content {
+  background: var(--bg-elevated) !important;
+}
+
 /* 搜索高亮 */
 .search-highlight {
   background: rgba(22, 119, 255, 0.3);
@@ -246,6 +266,11 @@ code {
   border-radius: 8px !important;
   background: var(--message-bg) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-message-notice-content .anticon {
+  color: var(--text-primary) !important;
 }
 
 /* Drawer 抽屉组件 */
@@ -354,7 +379,54 @@ code {
 }
 
 .ant-popover-inner-content {
+  color: var(--text-primary) !important;
+}
+
+/* Popconfirm 气泡确认框（基于 Popover）*/
+.ant-popconfirm-message {
+  color: var(--text-primary) !important;
+}
+
+.ant-popconfirm-message .anticon {
+  color: var(--accent-warning) !important;
+}
+
+.ant-popconfirm-description {
   color: var(--text-secondary) !important;
+}
+
+.ant-popconfirm-buttons .ant-btn {
+  color: var(--text-primary) !important;
+}
+
+/* Notification 通知提醒框 */
+.ant-notification-notice {
+  background: var(--message-bg) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ant-notification-notice-content {
+  color: var(--text-primary) !important;
+}
+
+.ant-notification-notice-message {
+  color: var(--text-primary) !important;
+}
+
+.ant-notification-notice-description {
+  color: var(--text-secondary) !important;
+}
+
+.ant-notification-notice .anticon {
+  color: var(--text-primary) !important;
+}
+
+.ant-notification-notice-close {
+  color: var(--text-secondary) !important;
+}
+
+.ant-notification-notice-close:hover {
+  color: var(--text-primary) !important;
 }
 
 /* Table 表格 */
@@ -484,6 +556,10 @@ code {
    ============================================ */
 
 [data-theme="light"] .ant-message-notice-content {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="light"] .ant-notification-notice {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 

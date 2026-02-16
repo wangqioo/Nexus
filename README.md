@@ -109,6 +109,25 @@ Nexus 打通了项目管理和知识沉淀的完整链路：
 - **AI**: 智谱 GLM-4-Flash
 - **构建**: Vite + esbuild
 
+## 发布到 GitHub
+
+项目可直接推送到 GitHub 分享给他人：
+
+1. **在 GitHub 新建仓库**（如 `your-username/nexus`），不要勾选「Add .gitignore」等（本仓库自带）。
+2. **本地初始化并推送**（若尚未 git init）：
+   ```bash
+   cd /path/to/Nexus
+   git init
+   git add .
+   git commit -m "feat: Nexus v2.0"
+   git branch -M main
+   git remote add origin https://github.com/your-username/nexus.git
+   git push -u origin main
+   ```
+3. **他人使用**：clone 后 `npm install`，首次打开在「设置」中配置智谱 API Key，然后 `npm run electron:dev` 或按下面构建安装包。
+
+注意：智谱 API Key、`~/.nexus/` 下的数据均不会进仓库，他人需自行申请 Key 并在应用内填写。
+
 ## 开发
 
 ```bash
@@ -122,6 +141,8 @@ npm run electron:dev
 npm run electron:build:mac
 ```
 
+调试时若终端出现 **TSM AdjustCapsLockLED** 等 macOS 系统提示，可忽略，不影响功能。
+
 ## 数据存储
 
 ```
@@ -132,7 +153,7 @@ npm run electron:build:mac
 │   └── ...
 ├── notes/           # 独立笔记
 ├── projects/        # 项目索引
-└── config.json      # 配置（API Key 等）
+└── config.json      # 配置（智谱 API Key 等，不随项目分享；他人 clone 后需在「设置」中填写自己的 Key）
 ```
 
 ## Cursor Skills

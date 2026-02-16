@@ -3,7 +3,7 @@
   "appId": "com.nexus.devhub",
   "productName": "Nexus",
   "directories": {
-    "output": "release",
+    "output": "/Users/wq/Desktop",
     "buildResources": "build"
   },
   "files": [
@@ -17,7 +17,9 @@
     "target": [
       {
         "target": "dmg",
-        "arch": ["x64", "arm64"]
+        "arch": [
+          "arm64"
+        ]
       }
     ],
     "artifactName": "${productName}-${version}-${arch}.${ext}",
@@ -27,7 +29,9 @@
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "artifactName": "${productName}-${version}-setup.${ext}"
@@ -36,7 +40,9 @@
     "target": [
       {
         "target": "AppImage",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "artifactName": "${productName}-${version}.${ext}",
@@ -47,5 +53,6 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false
-  }
+  },
+  "publish": null
 }

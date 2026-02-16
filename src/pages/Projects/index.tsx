@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Typography, Input, Button, Card, Tag, Empty, Space,
   message, Row, Col, Tooltip, Spin, Modal, Form,
-  Select, Popconfirm, Tabs, List, Drawer, Dropdown, Badge, Segmented, Pagination
+  Select, Popconfirm, Tabs, List, Drawer, Dropdown, Badge, Segmented, Pagination, Progress, Steps, Checkbox
 } from 'antd'
 import {
   SearchOutlined, FolderOutlined, FolderAddOutlined, SyncOutlined,
@@ -13,7 +13,7 @@ import {
   ReloadOutlined, ImportOutlined, ExportOutlined, EyeOutlined,
   ThunderboltOutlined, GithubOutlined, ClockCircleOutlined, RightOutlined
 } from '@ant-design/icons'
-import type { LocalProject, SilProjectConfig, SilDocument, SilProjectData, ProjectType } from '../../types'
+import type { LocalProject, SilProjectConfig, SilDocument, SilProjectData, ProjectType, CustomProjectType, LocalProjectAnalysis } from '../../types'
 import { PROJECT_TYPES } from '../../types'
 
 // 格式化相对时间
@@ -46,12 +46,24 @@ const { TextArea } = Input
 // 本地项目配置文件
 const LOCAL_PROJECTS_FILE = 'local-projects.json'
 
+// 从路径取文件夹原名；卡片展示为「原名 · 概括名」（已导入项目也统一用此格式）
+function getFolderName(projectPath: string): string {
+  if (!projectPath || typeof projectPath !== 'string') return ''
+  return projectPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || ''
+}
+function getProjectDisplayName(project: LocalProject): string {
+  const folder = getFolderName(project.path)
+  const summary = project.name
+  if (folder && summary && folder !== summary) return `${folder} · ${summary}`
+  return folder || summary || '项目'
+}
+
 export function Projects() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<LocalProject[]>([])
   const [filteredProjects, setFilteredProjects] = useState<LocalProject[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedType, setSelectedType] = useState<ProjectType | 'all'>('all')
+  const [selectedType, setSelectedType] = useState<string | 'all'>('all')
   const [loading, setLoading] = useState(true)
   
   // 分页状态
@@ -59,7 +71,12 @@ export function Projects() {
   const [pageSize, setPageSize] = useState(12) // 每页显示 12 个项目
   const [selectedProject, setSelectedProject] = useState<LocalProject | null>(null)
   const [projectData, setProjectData] = useState<SilProjectData | null>(null)
-  const [linkedDocs, setLinkedDocs] = useState<{ knowledge: KnowledgeEntry[], notes: Note[] }>({ knowledge: [], notes: [] })
+  const [linkedDocs, setLinkedDocs] = useState<{
+    knowledge: KnowledgeEntry[]
+    notes: Note[]
+    removedKnowledge: KnowledgeEntry[]
+    removedNotes: Note[]
+  }>({ knowledge: [], notes: [], removedKnowledge: [], removedNotes: [] })
   
   // 模态框状态
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -71,6 +88,9 @@ export function Projects() {
   
   // GitHub 导入状态
   const [cloning, setCloning] = useState(false)
+  const [cloneProgress, setCloneProgress] = useState(0)
+  const [cloneSpeed, setCloneSpeed] = useState('')
+  const [cloneStatus, setCloneStatus] = useState<'cloning' | 'analyzing' | 'moving'>('cloning')
   
   // 批量扫描状态
   const [batchScanDir, setBatchScanDir] = useState('')
@@ -85,6 +105,31 @@ export function Projects() {
   // 导入成功弹窗状态
   const [importSuccessOpen, setImportSuccessOpen] = useState(false)
   const [importedProject, setImportedProject] = useState<LocalProject | null>(null)
+  // 正在为该项目的 id 生成介绍（用于按钮 loading）
+  const [generatingSummaryForId, setGeneratingSummaryForId] = useState<string | null>(null)
+  // 导入成功弹窗中「再次分析分类」的 loading
+  const [reAnalyzingImport, setReAnalyzingImport] = useState(false)
+  
+  // 一键加载配置（为已导入项目写入 project.yaml + .nexus，统一使用一份模板）
+  const [loadConfigModalOpen, setLoadConfigModalOpen] = useState(false)
+  const [loadConfigOnlyUninit, setLoadConfigOnlyUninit] = useState(true)
+  const [loadConfigProgress, setLoadConfigProgress] = useState<{ current: number; total: number; step: string } | null>(null)
+  const [loadConfigLoading, setLoadConfigLoading] = useState(false)
+  const [loadConfigSingleLoading, setLoadConfigSingleLoading] = useState<string | null>(null)
+  
+  // 清空所有笔记/知识库并删除各项目 .nexus
+  const [resetAllModalOpen, setResetAllModalOpen] = useState(false)
+  const [resetAllLoading, setResetAllLoading] = useState(false)
+  
+  // 自定义项目类型 + 无法归类时的待处理分析结果
+  const [customTypes, setCustomTypes] = useState<CustomProjectType[]>([])
+  const [pendingUnclassified, setPendingUnclassified] = useState<LocalProjectAnalysis | null>(null)
+  /** 仅当 GitHub 克隆后 AI 无法归类时存在，用于确认后执行移动与添加 */
+  const [pendingGithubUnclassified, setPendingGithubUnclassified] = useState<{ tempPath: string; repoName: string; url: string; branch?: string } | null>(null)
+  const [unclassifiedResolveType, setUnclassifiedResolveType] = useState<'create' | 'choose'>('create')
+  const [newTypeName, setNewTypeName] = useState('')
+  const [selectedExistingTypeId, setSelectedExistingTypeId] = useState<string>('')
+  const [unclassifiedSubmitting, setUnclassifiedSubmitting] = useState(false)
   
   // 使用全局同步状态
   const { syncing, syncProgress, startSync, updateProgress, endSync } = useSync()
@@ -113,6 +158,16 @@ export function Projects() {
 
   useEffect(() => {
     loadProjects()
+  }, [])
+
+  useEffect(() => {
+    const load = async () => {
+      if (window.electronAPI?.getCustomProjectTypes) {
+        const list = await window.electronAPI.getCustomProjectTypes()
+        setCustomTypes(list || [])
+      }
+    }
+    load()
   }, [])
 
   useEffect(() => {
@@ -166,8 +221,8 @@ export function Projects() {
         setProjects(projectList)
         setLoading(false)
         
-        // 后台异步加载详细状态（不阻塞 UI）
-        checkProjectsStatusAsync(projectList)
+        // 后台异步检查所有项目的文档数等状态（不只看第一页，避免其他页卡片一直显示 0）
+        checkProjectsStatusAsync(projectList, true)
       } else {
         setLoading(false)
       }
@@ -295,8 +350,13 @@ export function Projects() {
     return filteredProjects.slice(startIndex, startIndex + pageSize)
   }, [filteredProjects, currentPage, pageSize])
   
-  // 获取各类型项目数量
-  const getTypeCount = (type: ProjectType | 'all') => {
+  // 合并内置 + 自定义类型（用于筛选与展示）
+  const allProjectTypes = useMemo(() => [
+    ...PROJECT_TYPES,
+    ...customTypes.map(ct => ({ id: ct.id, name: ct.name, icon: ct.icon, color: ct.color, description: '', specificFields: [] as string[], knowledgeCategories: [] as { id: string; name: string; icon: string; description: string }[] })),
+  ], [customTypes])
+
+  const getTypeCount = (type: string) => {
     if (type === 'all') return projects.length
     return projects.filter(p => p.projectType === type).length
   }
@@ -358,9 +418,7 @@ export function Projects() {
       const result = await window.electronAPI.analyzeLocalProject(projectPath, apiKey)
       
       if (result) {
-        // 保存分析结果供后续使用
         const analysisResult = result
-        
         importForm.setFieldsValue({
           name: result.name,
           description: result.description,
@@ -368,21 +426,26 @@ export function Projects() {
           framework: result.framework,
           tags: [...(result.tags || []), ...(result.peripherals || [])].join(', '),
         })
-        
-        message.success({ content: '分析完成！3 秒后自动添加...', key: 'analyze' })
-        
-        // 倒计时 3 秒后自动添加
-        setCountdown(3)
-        const timer = setInterval(() => {
-          setCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(timer)
-              handleSaveProjectWithAutoInit(analysisResult)
-              return 0
-            }
-            return prev - 1
-          })
-        }, 1000)
+        const allTypeIds: string[] = [...PROJECT_TYPES.map(t => t.id), ...customTypes.map(t => t.id)]
+        const isUnclassified = result.projectType && !allTypeIds.includes(String(result.projectType))
+        if (isUnclassified) {
+          message.success({ content: '分析完成。该项目无法归类到现有类型，请选择处理方式', key: 'analyze' })
+          setNewTypeName(result.suggestedNewTypeName || result.projectType || '未分类')
+          setPendingUnclassified(analysisResult)
+        } else {
+          message.success({ content: '分析完成！3 秒后自动添加...', key: 'analyze' })
+          setCountdown(3)
+          const timer = setInterval(() => {
+            setCountdown(prev => {
+              if (prev <= 1) {
+                clearInterval(timer)
+                handleSaveProjectWithAutoInit(analysisResult)
+                return 0
+              }
+              return prev - 1
+            })
+          }, 1000)
+        }
       } else {
         message.error({ content: '分析失败，请检查 API Key', key: 'analyze' })
       }
@@ -394,18 +457,16 @@ export function Projects() {
     setAnalyzing(false)
   }
   
-  // 保存项目并自动初始化 .nexus（用于 AI 分析后自动添加）
-  const handleSaveProjectWithAutoInit = async (analysisResult: any) => {
+  // 保存项目并自动初始化 .nexus（用于 AI 分析后自动添加；resolvedProjectType 为「无法归类」时用户选择或创建的类型）
+  const handleSaveProjectWithAutoInit = async (analysisResult: any, resolvedProjectType?: string) => {
     try {
       const values = await importForm.validateFields()
       
-      // 查重：检查路径是否已存在
       if (projects.some(p => p.path === values.path)) {
         message.error('该项目路径已存在')
         return
       }
       
-      // 查重：检查项目名称是否已存在
       const existingByName = projects.find(p => 
         p.name.toLowerCase() === values.name?.toLowerCase()
       )
@@ -414,13 +475,11 @@ export function Projects() {
         return
       }
       
-      // 使用 AI 分析的项目类型
-      const projectType = (analysisResult?.projectType as ProjectType) || values.projectType || 'mcu'
-      const projectName = values.name?.replace(/[\/\\:*?"<>|]/g, '-') || values.path.split('/').pop() || 'project'
+      const projectType = (resolvedProjectType ?? analysisResult?.projectType ?? values.projectType ?? 'mcu') as string
       
-      // 自动移动到对应类型目录
+      // 移动到对应类型目录，文件夹名保持原名
       message.loading({ content: `正在移动到 ${projectType.toUpperCase()} 目录...`, key: 'save', duration: 0 })
-      const moveResult = await window.electronAPI.moveToTypeDir(values.path, projectType, projectName)
+      const moveResult = await window.electronAPI.moveToTypeDir(values.path, projectType)
       
       const finalPath = moveResult.success ? moveResult.newPath : values.path
       
@@ -454,15 +513,16 @@ export function Projects() {
           newProject.documentCount = syncResult.imported + syncResult.updated
         }
         } else {
-          // 没有 .nexus，自动初始化
+          // 没有 .nexus，使用统一模板自动初始化（projectType 写入 project.yaml，用于同步时知识库目录与笔记筛选）
         const silConfig = {
-          id: newProject.id,  // 传递项目 ID 用于路径变化检测
+          id: newProject.id,
           name: values.name,
           description: values.description || '',
           chip: values.chip || analysisResult?.chip || '',
           framework: values.framework || analysisResult?.framework || '',
           peripherals: analysisResult?.peripherals || [],
           tags: values.tags ? values.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
+          projectType,  // 写入 project.yaml，同步时决定 knowledge 目录与笔记面板筛选
         }
         
         const initSuccess = await window.electronAPI.initSilProject(finalPath, silConfig)
@@ -488,6 +548,110 @@ export function Projects() {
       console.error('保存失败:', error)
       message.error({ content: '保存失败', key: 'save' })
     }
+  }
+
+  // 无法归类：创建新类型并添加项目
+  const handleUnclassifiedCreateType = async () => {
+    if (!pendingUnclassified) return
+    const id = (pendingUnclassified.projectType as string)?.replace(/[^a-zA-Z0-9_-]/g, '_') || newTypeName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') || 'custom'
+    setUnclassifiedSubmitting(true)
+    try {
+      const res = await window.electronAPI.addCustomProjectType({ id, name: newTypeName.trim() || id })
+      if (res.success) {
+        setCustomTypes(prev => [...prev, res.type!])
+        if (pendingGithubUnclassified) {
+          await handleGithubUnclassifiedResolve(pendingGithubUnclassified, pendingUnclassified, id)
+          setPendingUnclassified(null)
+          setPendingGithubUnclassified(null)
+          setImportModalOpen(false)
+          message.success('已创建新类型并添加项目')
+        } else {
+          await handleSaveProjectWithAutoInit(pendingUnclassified, id)
+          setPendingUnclassified(null)
+          setImportModalOpen(false)
+          message.success('已创建新类型并添加项目')
+        }
+      } else {
+        message.error(res.error || '创建失败')
+      }
+    } catch (e) {
+      message.error('操作失败')
+    }
+    setUnclassifiedSubmitting(false)
+  }
+
+  // 无法归类：选择已有类型并添加项目
+  const handleUnclassifiedChooseExisting = async () => {
+    if (!pendingUnclassified || !selectedExistingTypeId) {
+      message.warning('请选择要归属的类型')
+      return
+    }
+    setUnclassifiedSubmitting(true)
+    try {
+      if (pendingGithubUnclassified) {
+        await handleGithubUnclassifiedResolve(pendingGithubUnclassified, pendingUnclassified, selectedExistingTypeId)
+        setPendingUnclassified(null)
+        setPendingGithubUnclassified(null)
+        setImportModalOpen(false)
+        message.success('已按所选类型添加项目')
+      } else {
+        await handleSaveProjectWithAutoInit(pendingUnclassified, selectedExistingTypeId)
+        setPendingUnclassified(null)
+        setImportModalOpen(false)
+        message.success('已按所选类型添加项目')
+      }
+    } catch (e) {
+      message.error('操作失败')
+    }
+    setUnclassifiedSubmitting(false)
+  }
+
+  /** GitHub 克隆后无法归类时，用户确认类型后执行移动、创建项目、初始化 .nexus */
+  const handleGithubUnclassifiedResolve = async (
+    source: { tempPath: string; repoName: string; url: string; branch?: string },
+    analysisResult: LocalProjectAnalysis,
+    resolvedType: string
+  ) => {
+    const moveResult = await window.electronAPI.moveToTypeDir(source.tempPath, resolvedType, source.repoName)
+    if (!moveResult.success) {
+      throw new Error(moveResult.error || '移动失败')
+    }
+    const finalPath = moveResult.newPath
+    const newProject: LocalProject = {
+      id: Date.now().toString(),
+      name: analysisResult?.name || source.repoName,
+      path: finalPath,
+      description: analysisResult?.description || '',
+      summary: analysisResult?.summary || '',
+      features: analysisResult?.features || [],
+      projectType: resolvedType,
+      chip: analysisResult?.chip || '',
+      framework: analysisResult?.framework || '',
+      peripherals: analysisResult?.peripherals || [],
+      tags: analysisResult ? [...(analysisResult.tags || []), ...(analysisResult.peripherals || [])] : [],
+      hasSil: false,
+      documentCount: 0,
+      status: 'active',
+      githubUrl: source.url,
+    }
+    const silConfig = {
+      id: newProject.id,
+      name: newProject.name,
+      description: newProject.description,
+      chip: newProject.chip,
+      framework: newProject.framework,
+      peripherals: newProject.peripherals,
+      tags: newProject.tags,
+      githubUrl: source.url,
+      projectType: newProject.projectType,
+    }
+    const initSuccess = await window.electronAPI.initSilProject(finalPath, silConfig)
+    if (initSuccess) newProject.hasSil = true
+    const newProjects = [...projects, newProject]
+    await saveProjects(newProjects)
+    setProjects(newProjects)
+    setImportedProject(newProject)
+    setImportSuccessOpen(true)
   }
 
   // ============================================================
@@ -517,14 +681,20 @@ export function Projects() {
       }
       
       const repoName = match[2]
-      // 先克隆到临时目录
       const tempPath = `/tmp/nexus-import-${Date.now()}`
       
       setCloning(true)
-      message.loading({ content: '正在克隆仓库...', key: 'clone', duration: 0 })
+      setCloneProgress(0)
+      setCloneSpeed('')
+      setCloneStatus('cloning')
+      const unsub = window.electronAPI.onGitCloneProgress((data) => {
+        setCloneProgress(data.percent)
+        setCloneSpeed(data.speedText)
+      })
       
-      // 克隆仓库
-      const cloneResult = await window.electronAPI.gitClone(url, tempPath, values.branch || 'main')
+      const branch = values.branch?.trim() || undefined
+      const cloneResult = await window.electronAPI.gitClone(url, tempPath, branch)
+      unsub()
       
       if (!cloneResult.success) {
         message.error({ content: `克隆失败: ${cloneResult.error}`, key: 'clone' })
@@ -532,7 +702,8 @@ export function Projects() {
         return
       }
       
-      message.loading({ content: '克隆完成，正在 AI 分析项目类型...', key: 'clone', duration: 0 })
+      setCloneProgress(100)
+      setCloneStatus('analyzing')
       
       // AI 分析项目
       let analysisResult = null
@@ -540,14 +711,23 @@ export function Projects() {
       if (apiKey) {
         analysisResult = await window.electronAPI.analyzeLocalProject(tempPath, apiKey)
         if (analysisResult?.projectType) {
+          const allTypeIds: string[] = [...PROJECT_TYPES.map(t => t.id), ...customTypes.map(t => t.id)]
+          const isUnclassified = !allTypeIds.includes(String(analysisResult.projectType))
+          if (isUnclassified) {
+            setPendingUnclassified(analysisResult)
+            setPendingGithubUnclassified({ tempPath, repoName, url, branch })
+            setCloning(false)
+            setCloneProgress(0)
+            setCloneSpeed('')
+            setCloneStatus('cloning')
+            message.success({ content: '该项目无法归类到现有类型，请选择处理方式', key: 'clone' })
+            return
+          }
           projectType = analysisResult.projectType as ProjectType
         }
       }
       
-      const projectName = analysisResult?.name?.replace(/[\/\\:*?"<>|]/g, '-') || repoName
-      
-      // 根据项目类型移动到对应目录
-      message.loading({ content: `正在移动到 ${projectType.toUpperCase()} 目录...`, key: 'clone', duration: 0 })
+      setCloneStatus('moving')
       const moveResult = await window.electronAPI.moveToTypeDir(tempPath, projectType, repoName)
       
       if (!moveResult.success) {
@@ -558,10 +738,10 @@ export function Projects() {
       
       const finalPath = moveResult.newPath
       
-      // 创建项目记录
+      // 创建项目记录：name 为 AI 概括名（展示时与文件夹原名用 · 拼接）
       const newProject: LocalProject = {
         id: Date.now().toString(),
-        name: projectName,
+        name: analysisResult?.name || repoName,
         path: finalPath,
         description: analysisResult?.description || '',
         summary: analysisResult?.summary || '',           // AI 生成的详细介绍
@@ -577,9 +757,9 @@ export function Projects() {
         githubUrl: url,
       }
       
-      // 初始化 .nexus
+      // 使用统一模板初始化 .nexus（projectType 写入 project.yaml）
       const silConfig = {
-        id: newProject.id,  // 传递项目 ID 用于路径变化检测
+        id: newProject.id,
         name: newProject.name,
         description: newProject.description,
         chip: newProject.chip,
@@ -587,6 +767,7 @@ export function Projects() {
         peripherals: analysisResult?.peripherals || [],
         tags: newProject.tags,
         githubUrl: url,
+        projectType: newProject.projectType,
       }
       
       const initSuccess = await window.electronAPI.initSilProject(finalPath, silConfig)
@@ -602,17 +783,16 @@ export function Projects() {
       message.success({ content: '项目导入成功！', key: 'clone' })
       setImportModalOpen(false)
       importForm.resetFields()
-      
-      // 弹出成功窗口
       setImportedProject(newProject)
       setImportSuccessOpen(true)
-      
     } catch (error) {
       console.error('GitHub 导入失败:', error)
       message.error('导入失败')
+    } finally {
+      setCloning(false)
+      setCloneProgress(0)
+      setCloneSpeed('')
     }
-    
-    setCloning(false)
   }
 
   const handleSaveProject = async () => {
@@ -714,15 +894,15 @@ export function Projects() {
     }
   }
 
-  // 确认初始化 .nexus
+  // 确认初始化 .nexus（使用统一模板，projectType 写入 project.yaml）
   const handleInitSil = async () => {
     if (!selectedProject) return
     
     try {
       const values = await initForm.validateFields()
       
-      const config: SilProjectConfig = {
-        id: selectedProject.id,  // 传递项目 ID 用于路径变化检测
+      const config: SilProjectConfig & { projectType?: string } = {
+        id: selectedProject.id,
         name: values.name || selectedProject.name,
         description: values.description || '',
         chip: values.chip || selectedProject.chip,
@@ -730,6 +910,7 @@ export function Projects() {
         peripherals: values.peripherals ? values.peripherals.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
         tags: values.tags ? values.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
         githubUrl: values.githubUrl || '',
+        projectType: selectedProject.projectType,  // 写入 project.yaml，同步时决定 knowledge 目录与笔记筛选
       }
       
       const success = await window.electronAPI.initSilProject(selectedProject.path, config)
@@ -752,6 +933,216 @@ export function Projects() {
     }
   }
 
+  // 从本地项目构建 SilProjectConfig（用于一键加载配置）
+  const projectToSilConfig = (p: LocalProject): SilProjectConfig & { projectType?: string } => ({
+    id: p.id,
+    name: p.name || getFolderName(p.path),
+    description: p.description || '',
+    chip: p.chip || '',
+    framework: p.framework || '',
+    peripherals: p.peripherals || [],
+    tags: p.tags || [],
+    githubUrl: (p as any).githubUrl || '',
+    projectType: p.projectType,
+  })
+
+  // 单项目：一键加载配置（写入 project.yaml + .nexus，统一模板）
+  const handleLoadConfigSingle = async (project: LocalProject) => {
+    setLoadConfigSingleLoading(project.id)
+    try {
+      const config = projectToSilConfig(project)
+      const success = await window.electronAPI.initSilProject(project.path, config)
+      if (success) {
+        message.success(`已为「${getProjectDisplayName(project)}」加载配置`)
+        const updated = projects.map(q => q.id === project.id ? { ...q, hasSil: true } : q)
+        setProjects(updated)
+        await saveProjects(updated)
+        if (selectedProject?.id === project.id) {
+          setSelectedProject(updated.find(q => q.id === project.id) || selectedProject)
+        }
+      } else {
+        message.error('加载配置失败')
+      }
+    } catch (e) {
+      message.error('加载配置失败')
+    }
+    setLoadConfigSingleLoading(null)
+  }
+
+  // 打开「一键加载配置」弹窗
+  const handleOpenLoadConfigBulk = () => {
+    const targets = loadConfigOnlyUninit
+      ? filteredProjects.filter(p => !p.hasSil)
+      : filteredProjects
+    if (targets.length === 0) {
+      message.info(loadConfigOnlyUninit ? '当前没有未初始化的项目' : '当前筛选下没有项目')
+      return
+    }
+    setLoadConfigModalOpen(true)
+  }
+
+  // 批量执行加载配置
+  const handleExecuteLoadConfigBulk = async () => {
+    const targets = loadConfigOnlyUninit
+      ? filteredProjects.filter(p => !p.hasSil)
+      : filteredProjects
+    if (targets.length === 0) return
+    setLoadConfigLoading(true)
+    setLoadConfigProgress({ current: 0, total: targets.length, step: '准备中...' })
+    let ok = 0
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i]
+      setLoadConfigProgress({ current: i + 1, total: targets.length, step: getProjectDisplayName(p) })
+      try {
+        const success = await window.electronAPI.initSilProject(p.path, projectToSilConfig(p))
+        if (success) ok++
+      } catch (_) { /* skip */ }
+    }
+    setLoadConfigProgress(null)
+    setLoadConfigLoading(false)
+    const updated = projects.map(q =>
+      targets.some(t => t.id === q.id) ? { ...q, hasSil: true } : q
+    )
+    setProjects(updated)
+    await saveProjects(updated)
+    setLoadConfigModalOpen(false)
+    message.success(`已为 ${ok}/${targets.length} 个项目加载配置`)
+  }
+
+  // 从文件加载配置到当前选中项目
+  const handleLoadConfigFromFile = async (project: LocalProject) => {
+    const file = await window.electronAPI.selectConfigFile()
+    if (!file?.content) return
+    const config = await window.electronAPI.parseProjectConfig(file.content)
+    if (!config) {
+      message.error('无法解析配置文件，请确认是 project.yaml 或兼容的 JSON')
+      return
+    }
+    setLoadConfigSingleLoading(project.id)
+    try {
+      const fullConfig = { ...config, id: config.id || project.id, name: config.name || project.name }
+      const success = await window.electronAPI.initSilProject(project.path, fullConfig)
+      if (success) {
+        message.success('已从文件加载配置')
+        const updated = projects.map(q => q.id === project.id ? { ...q, hasSil: true } : q)
+        setProjects(updated)
+        await saveProjects(updated)
+        if (selectedProject?.id === project.id) setSelectedProject(updated.find(q => q.id === project.id) || selectedProject)
+      } else {
+        message.error('加载配置失败')
+      }
+    } catch (e) {
+      message.error('加载配置失败')
+    }
+    setLoadConfigSingleLoading(null)
+  }
+
+  // 清空所有笔记、知识库文档并删除各项目 .nexus（便于重新配置）
+  const handleResetAllSyncData = async () => {
+    setResetAllLoading(true)
+    try {
+      const result = await window.electronAPI.resetAllSyncData()
+      if (result.success) {
+        const updated = projects.map(p => ({ ...p, hasSil: false }))
+        setProjects(updated)
+        await saveProjects(updated)
+        setResetAllModalOpen(false)
+        message.success(
+          `已清空：中央 ${result.centralDeleted} 条文档，${result.removedNexusDirs} 个项目的 .nexus 已删除。可重新加载配置。`
+        )
+      } else {
+        message.error(result.errors?.join(' ') || '执行失败')
+      }
+    } catch (e) {
+      message.error('执行失败')
+    }
+    setResetAllLoading(false)
+  }
+
+  // 为当前项目 AI 生成介绍（无 summary 时使用）
+  const handleGenerateSummary = async () => {
+    if (!selectedProject) return
+    if (!apiKey) {
+      message.warning('请先在导入弹窗或设置中填写智谱 API Key')
+      return
+    }
+    setGeneratingSummaryForId(selectedProject.id)
+    message.loading({ content: '正在生成项目介绍...', key: 'gen-summary', duration: 0 })
+    try {
+      const result = await window.electronAPI.analyzeLocalProject(selectedProject.path, apiKey)
+      if (result?.summary) {
+        const updatedProjects = projects.map(p =>
+          p.id === selectedProject.id
+            ? {
+                ...p,
+                summary: result.summary,
+                name: result.name || p.name,
+                description: result.description || p.description,
+                features: result.features?.length ? result.features : p.features,
+                tags: result.tags?.length ? result.tags : p.tags,
+              }
+            : p
+        )
+        setProjects(updatedProjects)
+        await saveProjects(updatedProjects)
+        setSelectedProject(updatedProjects.find(p => p.id === selectedProject.id) || selectedProject)
+        message.success({ content: '项目介绍已生成', key: 'gen-summary' })
+      } else {
+        message.warning({ content: '生成失败或未返回介绍', key: 'gen-summary' })
+      }
+    } catch (e) {
+      message.error({ content: '生成失败，请检查 API Key 与网络', key: 'gen-summary' })
+    }
+    setGeneratingSummaryForId(null)
+  }
+
+  // 导入成功后：对分类不满意时再次分析并更新
+  const handleReAnalyzeImported = async () => {
+    if (!importedProject) return
+    if (!apiKey) {
+      message.warning('请先在导入弹窗或设置中填写智谱 API Key')
+      return
+    }
+    setReAnalyzingImport(true)
+    message.loading({ content: '正在重新分析项目分类...', key: 'reanalyze', duration: 0 })
+    try {
+      const result = await window.electronAPI.analyzeLocalProject(importedProject.path, apiKey)
+      if (!result) {
+        message.warning({ content: '分析未返回结果', key: 'reanalyze' })
+        setReAnalyzingImport(false)
+        return
+      }
+      const newType = (result.projectType as ProjectType) || importedProject.projectType
+      let finalPath = importedProject.path
+      if (newType !== importedProject.projectType) {
+        const folderName = importedProject.path.split('/').filter(Boolean).pop() || importedProject.name
+        const moveResult = await window.electronAPI.moveToTypeDir(importedProject.path, newType, folderName)
+        if (moveResult.success && moveResult.newPath) finalPath = moveResult.newPath
+      }
+      const updated: LocalProject = {
+        ...importedProject,
+        name: result.name || importedProject.name,
+        description: result.description || importedProject.description,
+        summary: result.summary || importedProject.summary,
+        projectType: newType,
+        chip: result.chip ?? importedProject.chip,
+        framework: result.framework ?? importedProject.framework,
+        peripherals: result.peripherals ?? importedProject.peripherals,
+        tags: result.tags ?? importedProject.tags,
+        features: result.features ?? importedProject.features,
+        path: finalPath,
+      }
+      const updatedProjects = projects.map(p => (p.id === importedProject.id ? updated : p))
+      setProjects(updatedProjects)
+      await saveProjects(updatedProjects)
+      setImportedProject(updated)
+      message.success({ content: '已根据再次分析结果更新分类与信息', key: 'reanalyze' })
+    } catch (e) {
+      message.error({ content: '再次分析失败，请检查 API Key 与网络', key: 'reanalyze' })
+    }
+    setReAnalyzingImport(false)
+  }
+
   // 查看项目详情
   const handleViewProject = async (project: LocalProject) => {
     setSelectedProject(project)
@@ -771,34 +1162,34 @@ export function Projects() {
     setDetailDrawerOpen(true)
   }
 
-  // 跳转到对应页面查看文档
+  // 跳转到对应页面查看文档（docId 必须与同步时写入的 JSON id 一致）
   const handleViewDocument = async (doc: SilDocument, project: LocalProject) => {
-    // 构建文档 ID（与同步时的命名规则一致 - 使用目录名而非 project.name）
-    const dirName = project.path.split('/').pop() || project.name
+    const dirName = getFolderName(project.path) || project.name
     const safeProjectName = dirName.replace(/[^a-zA-Z0-9_-]/g, '-')
-    const docId = `${safeProjectName}-${doc.filename.replace('.md', '')}`
-    
-    // 检查文档是否已同步（通过尝试读取文件）
+    const baseName = doc.filename.replace('.md', '')
+    // 笔记：id = projectName-baseName；知识库：id = projectName-silDir-baseName（与 main 同步一致）
+    const silDir = doc.type === 'snippet' ? 'snippets' : doc.type === 'config' ? 'configs' : doc.type === 'debug' ? 'debug' : 'other'
+    const docId = doc.type === 'note' ? `${safeProjectName}-${baseName}` : `${safeProjectName}-${silDir}-${baseName}`
+
+    const projectType = project.projectType || 'software'
     let filePath: string
     if (doc.type === 'note') {
       filePath = `notes/${docId}.json`
     } else {
-      // debug -> knowledge/{projectType}/debug/
-      // snippet -> knowledge/{projectType}/snippet/
-      // config -> knowledge/{projectType}/config/
-      const category = doc.type === 'snippet' ? 'snippet' : doc.type === 'config' ? 'config' : 'debug'
-      filePath = `knowledge/${project.projectType}/${category}/${docId}.json`
+      filePath = `knowledge/${projectType}/${safeProjectName}-${silDir}-${baseName}.json`
     }
-    
-    // 使用 readFile 检查文件是否存在
-    const content = await window.electronAPI.readFile(filePath)
-    
+
+    let content = await window.electronAPI.readFile(filePath)
+    if (!content && doc.type !== 'note') {
+      const legacyPath = `knowledge/${projectType}/${doc.type}/${safeProjectName}-${baseName}.json`
+      content = await window.electronAPI.readFile(legacyPath)
+    }
+
     if (!content) {
       message.warning('该文档尚未同步到知识库，请先同步项目')
       return
     }
-    
-    // 关闭抽屉并跳转
+
     setDetailDrawerOpen(false)
     if (doc.type === 'note') {
       navigate(`/notes?docId=${encodeURIComponent(docId)}`)
@@ -830,7 +1221,6 @@ export function Projects() {
         } else {
           message.info('没有新的经验文档需要导入')
         }
-        // 重新检查项目状态（确保 pendingCount 正确更新）
         await checkProjectsStatus(projects)
       } else {
         message.error(`导入失败: ${result.errors?.join(', ') || '未知错误'}`)
@@ -880,60 +1270,32 @@ export function Projects() {
     }
   }
 
-  // 刷新状态
+  // 从 Nexus 中删除条目（用于「已从项目删除的文档」红色删除按钮）
+  const handleRemoveFromNexus = async (type: 'knowledge' | 'note', entry: KnowledgeEntry | Note) => {
+    if (!selectedProject) return
+    try {
+      if (type === 'note') {
+        await storage.deleteNote(entry.id)
+      } else {
+        await storage.deleteKnowledgeEntry(entry as KnowledgeEntry)
+      }
+      message.success('已从 Nexus 中删除')
+      const docs = await storage.getDocumentsByProject(selectedProject.path)
+      setLinkedDocs(docs)
+    } catch (e: any) {
+      message.error(e?.message || '删除失败')
+    }
+  }
+
+  // 刷新状态（同时刷新当前项目详情中的「已同步 / 已删除」文档列表）
   const handleRefreshAll = async () => {
     message.loading({ content: '正在刷新...', key: 'refresh' })
     await checkProjectsStatus(projects)
+    if (selectedProject && detailDrawerOpen) {
+      const docs = await storage.getDocumentsByProject(selectedProject.path)
+      setLinkedDocs(docs)
+    }
     message.success({ content: '刷新完成', key: 'refresh' })
-  }
-
-  // 批量初始化未初始化的项目
-  const handleBatchInit = async () => {
-    const uninitProjects = projects.filter(p => !p.hasSil)
-    if (uninitProjects.length === 0) {
-      message.info('所有项目都已初始化 .nexus')
-      return
-    }
-    
-    message.loading({ content: `正在初始化 ${uninitProjects.length} 个项目...`, key: 'batch-init', duration: 0 })
-    
-    let successCount = 0
-    let failCount = 0
-    
-    for (const project of uninitProjects) {
-      try {
-        // 使用已有的元数据初始化
-        const config = {
-          id: project.id,  // 传递项目 ID 用于路径变化检测
-          name: project.name,
-          description: project.description || '',
-          chip: project.chip || '',
-          framework: project.framework || '',
-          peripherals: project.peripherals || [],
-          tags: project.tags || [],
-          githubUrl: project.githubUrl || '',
-        }
-        
-        const success = await window.electronAPI.initSilProject(project.path, config)
-        if (success) {
-          successCount++
-        } else {
-          failCount++
-        }
-      } catch (error) {
-        console.error(`初始化 ${project.name} 失败:`, error)
-        failCount++
-      }
-    }
-    
-    // 更新项目状态
-    await checkProjectsStatus(projects)
-    
-    if (failCount === 0) {
-      message.success({ content: `成功初始化 ${successCount} 个项目`, key: 'batch-init' })
-    } else {
-      message.warning({ content: `初始化完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, key: 'batch-init' })
-    }
   }
 
   // 批量扫描：选择目录并发现项目
@@ -988,6 +1350,8 @@ export function Projects() {
     const updatedProjects = [...projects]
     let imported = 0
     let errors = 0
+    let unclassifiedCount = 0
+    const allTypeIds: string[] = [...PROJECT_TYPES.map(t => t.id), ...customTypes.map(t => t.id)]
     
     for (let i = 0; i < batchNewProjects.length; i++) {
       const proj = batchNewProjects[i]
@@ -1004,7 +1368,18 @@ export function Projects() {
         updateProgress({ step: `AI 分析项目信息...`, current: i, total: batchNewProjects.length, file: proj.name })
         const analysis = await window.electronAPI.analyzeLocalProject(proj.path, apiKey)
         
-        const projectType = (analysis?.projectType as ProjectType) || 'mcu'
+        let projectType: string
+        if (analysis?.projectType && allTypeIds.includes(String(analysis.projectType))) {
+          projectType = analysis.projectType as ProjectType
+        } else {
+          unclassifiedCount++
+          if (analysis?.confidenceByType && typeof analysis.confidenceByType === 'object') {
+            const entries = Object.entries(analysis.confidenceByType).filter(([k]) => allTypeIds.includes(k))
+            projectType = entries.length ? entries.reduce((a, b) => (a[1] >= b[1] ? a : b))[0] : 'mcu'
+          } else {
+            projectType = 'mcu'
+          }
+        }
         const projectName = (analysis?.name || proj.name).replace(/[\/\\:*?"<>|]/g, '-')
         
         // 2. 移动到分类目录
@@ -1030,7 +1405,7 @@ export function Projects() {
           status: 'active',
         }
         
-        // 4. 初始化 .nexus
+        // 4. 使用统一模板初始化 .nexus
         if (!newProject.hasSil) {
           updateProgress({ step: `初始化 .nexus...`, current: i, total: batchNewProjects.length, file: proj.name })
           await window.electronAPI.initSilProject(finalPath, {
@@ -1040,6 +1415,7 @@ export function Projects() {
             framework: newProject.framework,
             peripherals: newProject.peripherals,
             tags: newProject.tags,
+            projectType: newProject.projectType,
           })
           newProject.hasSil = true
         }
@@ -1081,9 +1457,10 @@ export function Projects() {
     await saveProjects(updatedProjects)
     
     updateProgress({ step: '导入完成', current: batchNewProjects.length, total: batchNewProjects.length })
+    const unclassifiedTip = unclassifiedCount > 0 ? `；其中 ${unclassifiedCount} 个项目 AI 无法明确归类，已按推荐占比归档` : ''
     setTimeout(() => {
       endSync()
-      message.success(`批量导入完成: 成功 ${imported} 个, 失败 ${errors} 个`)
+      message.success(`批量导入完成: 成功 ${imported} 个, 失败 ${errors} 个${unclassifiedTip}`)
     }, 1000)
   }
 
@@ -1096,6 +1473,34 @@ export function Projects() {
   }
 
   return (
+    <>
+      {/* 后台导入时顶部固定进度条（可关闭弹窗继续操作） */}
+      {cloning && (
+        <div className={styles.importTopBar}>
+          <div className={styles.importTopBarInner}>
+            <span className={styles.importTopBarLabel}>
+              <ThunderboltOutlined /> 正在导入项目
+              {cloneStatus === 'cloning' && ' · 克隆仓库'}
+              {cloneStatus === 'analyzing' && ' · AI 分析'}
+              {cloneStatus === 'moving' && ' · 移动到目录'}
+              {cloneStatus === 'cloning' && cloneSpeed && ` · ${cloneSpeed}`}
+            </span>
+            {cloneStatus === 'cloning' ? (
+              <Progress
+                percent={cloneProgress}
+                showInfo={false}
+                strokeColor="var(--accent-primary)"
+                className={styles.importTopBarProgress}
+              />
+            ) : (
+              <div className={styles.importTopBarProgress} style={{ height: 6, background: 'var(--bg-tertiary)', borderRadius: 3 }}>
+                <div style={{ width: '30%', height: '100%', background: 'var(--accent-primary)', borderRadius: 3, animation: 'importPulse 1s ease-in-out infinite' }} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     <div className={styles.container}>
       
       {/* ====== 头部（与知识库统一） ====== */}
@@ -1106,6 +1511,8 @@ export function Projects() {
         </div>
         <div className={styles.headerActions}>
           <Button icon={<ReloadOutlined />} onClick={handleRefreshAll}>刷新</Button>
+          <Button icon={<SettingOutlined />} onClick={handleOpenLoadConfigBulk}>一键加载配置</Button>
+          <Button danger icon={<DeleteOutlined />} onClick={() => setResetAllModalOpen(true)}>清空并重置</Button>
           <Dropdown
             menu={{
               items: [
@@ -1113,12 +1520,6 @@ export function Projects() {
                 { key: 'github', icon: <GithubOutlined />, label: 'GitHub 项目', onClick: () => handleOpenImport('github') },
                 { type: 'divider' },
                 { key: 'batch', icon: <ImportOutlined />, label: '批量扫描导入', onClick: () => handleOpenImport('batch') },
-                ...(projects.some(p => !p.hasSil) ? [{
-                  key: 'batch-init',
-                  icon: <ThunderboltOutlined />,
-                  label: `批量初始化 (${projects.filter(p => !p.hasSil).length})`,
-                  onClick: handleBatchInit,
-                }] : []),
               ],
             }}
             placement="bottom"
@@ -1140,7 +1541,7 @@ export function Projects() {
             <span className={styles.typeLabel}>全部</span>
             <span className={styles.typeCount}>{getTypeCount('all')}</span>
           </div>
-          {PROJECT_TYPES.map(type => (
+          {allProjectTypes.map(type => (
             <div
               key={type.id}
               className={`${styles.typeTab} ${selectedType === type.id ? styles.typeTabActive : ''}`}
@@ -1177,7 +1578,7 @@ export function Projects() {
         </div>
       </div>
 
-      {/* ====== 搜索栏（与知识库统一） ====== */}
+      {/* ====== 搜索栏 ====== */}
       <div className={styles.toolbar}>
         <Input
           prefix={<SearchOutlined />}
@@ -1194,7 +1595,7 @@ export function Projects() {
         <>
           <div className={styles.cardGrid}>
             {paginatedProjects.map(project => {
-              const typeConfig = PROJECT_TYPES.find(t => t.id === project.projectType)
+              const typeConfig = allProjectTypes.find(t => t.id === project.projectType)
               return (
                 <Card
                 key={project.id}
@@ -1245,7 +1646,19 @@ export function Projects() {
                           }}
                           style={{ cursor: 'pointer' }}
                         >
-                          {project.name}
+                          {(() => {
+                            const folder = getFolderName(project.path)
+                            const summary = project.name
+                            if (folder && summary && folder !== summary) {
+                              return (
+                                <>
+                                  {folder}
+                                  <span className={styles.projectNameSummary}> · {summary}</span>
+                                </>
+                              )
+                            }
+                            return folder || summary || '项目'
+                          })()}
                         </div>
                       </Tooltip>
                     </div>
@@ -1290,11 +1703,8 @@ export function Projects() {
                   </Paragraph>
 
                   <div className={styles.cardFooter}>
-                    <span className={styles.docCount}>
-                      <FileTextOutlined /> {project.documentCount || 0}
-                      {project.pendingCount ? (
-                        <span style={{ marginLeft: 4, color: '#52c41a' }}>+{project.pendingCount}</span>
-                      ) : null}
+                    <span className={styles.docCount} title="该项目 .nexus 内已有文档数">
+                      <FileTextOutlined /> {project.documentCount ?? 0} 篇
                     </span>
                     <span className={styles.lastUpdate}>
                       <ClockCircleOutlined /> {formatRelativeTime(project.lastActivity)}
@@ -1472,7 +1882,7 @@ export function Projects() {
           )}
 
           {/* ---- GitHub 模式：输入 URL ---- */}
-          {importMode === 'github' && (
+          {importMode === 'github' && !cloning && (
             <>
               <Form.Item
                 name="githubUrl"
@@ -1488,10 +1898,64 @@ export function Projects() {
                 />
               </Form.Item>
               
-              <Form.Item name="branch" label="分支" initialValue="main">
-                <Input placeholder="main" />
+              <Form.Item name="branch" label="分支">
+                <Input placeholder="留空使用仓库默认分支（多为 main）" />
               </Form.Item>
             </>
+          )}
+
+          {/* ---- GitHub 模式：三阶段进度 + 克隆网速 ---- */}
+          {importMode === 'github' && cloning && (
+            <div style={{ padding: '16px 0', marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+                可关闭此窗口，导入在后台继续，顶部将显示进度
+              </Text>
+              {/* 总进度：克隆 0–33%，AI 分析 33–66%，移动 66–100% */}
+              {(() => {
+                const overallPercent = cloneStatus === 'cloning'
+                  ? Math.round((cloneProgress / 100) * 33)
+                  : cloneStatus === 'analyzing'
+                    ? 50
+                    : 83
+                return (
+                  <Progress
+                    percent={overallPercent}
+                    showInfo
+                    strokeColor="var(--accent-primary)"
+                    style={{ marginBottom: 16 }}
+                  />
+                )
+              })()}
+              <Steps
+                current={cloneStatus === 'cloning' ? 0 : cloneStatus === 'analyzing' ? 1 : 2}
+                size="small"
+                items={[
+                  {
+                    title: '克隆仓库',
+                    description: cloneStatus === 'cloning' ? (cloneSpeed ? `网速 ${cloneSpeed}` : '克隆中…') : '完成',
+                    status: cloneStatus === 'cloning' ? 'process' : 'finish',
+                  },
+                  {
+                    title: 'AI 分析',
+                    description: cloneStatus === 'analyzing' ? '分析项目类型…' : cloneStatus === 'moving' || cloneStatus === 'cloning' ? undefined : '完成',
+                    status: cloneStatus === 'analyzing' ? 'process' : cloneStatus === 'cloning' ? 'wait' : 'finish',
+                  },
+                  {
+                    title: '移动到目录',
+                    description: cloneStatus === 'moving' ? '移动中…' : undefined,
+                    status: cloneStatus === 'moving' ? 'process' : cloneStatus === 'cloning' || cloneStatus === 'analyzing' ? 'wait' : 'finish',
+                  },
+                ]}
+              />
+              {cloneStatus === 'cloning' && (cloneProgress > 0 || cloneSpeed) && (
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <Progress type="line" percent={cloneProgress} size="small" showInfo style={{ marginBottom: 0, flex: 1, maxWidth: 200 }} strokeColor="var(--accent-primary)" />
+                  {cloneSpeed && (
+                    <Text type="secondary" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>网速 {cloneSpeed}</Text>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </Form>
 
@@ -1598,7 +2062,7 @@ export function Projects() {
         width={600}
       >
         <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          将在项目目录创建 <code>.nexus</code> 文件夹，用于存储开发经验和笔记。
+          将在项目目录创建 <code>.nexus</code> 文件夹，用于存储开发经验和笔记。所有项目使用同一份模板配置（可在「模板设置」中修改）。
         </Paragraph>
         
         <Form form={initForm} layout="vertical">
@@ -1640,7 +2104,14 @@ export function Projects() {
 
       {/* 项目详情抽屉 */}
       <Drawer
-        title={selectedProject?.name}
+        title={selectedProject ? (() => {
+          const folder = getFolderName(selectedProject.path)
+          const summary = selectedProject.name
+          if (folder && summary && folder !== summary) {
+            return <>{folder}<span className={styles.projectNameSummary}> · {summary}</span></>
+          }
+          return folder || summary || '项目'
+        })() : ''}
         placement="right"
         width={600}
         open={detailDrawerOpen}
@@ -1660,7 +2131,7 @@ export function Projects() {
                 {selectedProject.peripherals?.map(p => (
                   <Tag key={p} color="cyan">{p}</Tag>
                 ))}
-                {selectedProject.tags.map(tag => (
+                {(selectedProject.tags || []).map(tag => (
                   <Tag key={tag}>{tag}</Tag>
                 ))}
               </Space>
@@ -1698,11 +2169,8 @@ export function Projects() {
                               type="primary" 
                               size="small"
                               icon={<ThunderboltOutlined />}
-                              onClick={() => {
-                                setDetailDrawerOpen(false)
-                                // TODO: 触发 AI 分析
-                                message.info('请使用"重建知识库"功能生成项目介绍')
-                              }}
+                              loading={generatingSummaryForId === selectedProject?.id}
+                              onClick={handleGenerateSummary}
                             >
                               AI 生成介绍
                             </Button>
@@ -1726,28 +2194,6 @@ export function Projects() {
                     ),
                   },
                   {
-                    key: 'debug',
-                    label: <><BugOutlined /> 调试经验 ({projectData.documents.filter(d => d.type === 'debug').length})</>,
-                    children: (
-                      <List
-                        size="small"
-                        dataSource={projectData.documents.filter(d => d.type === 'debug')}
-                        renderItem={doc => (
-                          <List.Item 
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => handleViewDocument(doc, selectedProject!)}
-                          >
-                            <List.Item.Meta
-                              title={<span style={{ color: '#1677ff' }}>{doc.title} <RightOutlined style={{ fontSize: 10 }} /></span>}
-                              description={doc.tags.slice(0, 3).join(', ')}
-                            />
-                          </List.Item>
-                        )}
-                        locale={{ emptyText: '暂无调试经验' }}
-                      />
-                    ),
-                  },
-                  {
                     key: 'notes',
                     label: <><FileTextOutlined /> 笔记 ({projectData.documents.filter(d => d.type === 'note').length})</>,
                     children: (
@@ -1761,11 +2207,33 @@ export function Projects() {
                           >
                             <List.Item.Meta
                               title={<span style={{ color: '#1677ff' }}>{doc.title} <RightOutlined style={{ fontSize: 10 }} /></span>}
-                              description={doc.tags.slice(0, 3).join(', ')}
+                              description={(doc.tags || []).slice(0, 3).join(', ')}
                             />
                           </List.Item>
                         )}
                         locale={{ emptyText: '暂无笔记' }}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'debug',
+                    label: <><BugOutlined /> 调试经验 ({projectData.documents.filter(d => d.type === 'debug').length})</>,
+                    children: (
+                      <List
+                        size="small"
+                        dataSource={projectData.documents.filter(d => d.type === 'debug')}
+                        renderItem={doc => (
+                          <List.Item 
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleViewDocument(doc, selectedProject!)}
+                          >
+                            <List.Item.Meta
+                              title={<span style={{ color: '#1677ff' }}>{doc.title} <RightOutlined style={{ fontSize: 10 }} /></span>}
+                              description={(doc.tags || []).slice(0, 3).join(', ')}
+                            />
+                          </List.Item>
+                        )}
+                        locale={{ emptyText: '暂无调试经验' }}
                       />
                     ),
                   },
@@ -1783,7 +2251,7 @@ export function Projects() {
                           >
                             <List.Item.Meta
                               title={<span style={{ color: '#1677ff' }}>{doc.title} <RightOutlined style={{ fontSize: 10 }} /></span>}
-                              description={doc.tags.slice(0, 3).join(', ')}
+                              description={(doc.tags || []).slice(0, 3).join(', ')}
                             />
                           </List.Item>
                         )}
@@ -1805,7 +2273,7 @@ export function Projects() {
                           >
                             <List.Item.Meta
                               title={<span style={{ color: '#1677ff' }}>{doc.title} <RightOutlined style={{ fontSize: 10 }} /></span>}
-                              description={doc.tags.slice(0, 3).join(', ')}
+                              description={(doc.tags || []).slice(0, 3).join(', ')}
                             />
                           </List.Item>
                         )}
@@ -1814,109 +2282,25 @@ export function Projects() {
                     ),
                   },
                   {
-                    key: 'synced',
-                    label: (
-                      <span>
-                        <SyncOutlined /> 已同步 
-                        {(linkedDocs.knowledge.length + linkedDocs.notes.length) > 0 && (
-                          <Badge 
-                            count={linkedDocs.knowledge.length + linkedDocs.notes.length} 
-                            size="small" 
-                            style={{ marginLeft: 4 }}
-                          />
-                        )}
-                      </span>
-                    ),
+                    key: 'other',
+                    label: <><FolderOpenOutlined /> 其他 ({projectData.documents.filter(d => d.type === 'other').length})</>,
                     children: (
-                      <div>
-                        {/* 知识库文档 */}
-                        {linkedDocs.knowledge.length > 0 && (
-                          <div style={{ marginBottom: 16 }}>
-                            <Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
-                              知识库 ({linkedDocs.knowledge.length})
-                            </Text>
-                            <List
-                              size="small"
-                              dataSource={linkedDocs.knowledge}
-                              renderItem={entry => (
-                                <List.Item 
-                                  style={{ cursor: 'pointer' }}
-                                  onClick={() => {
-                                    setDetailDrawerOpen(false)
-                                    navigate(`/knowledge?docId=${encodeURIComponent(entry.id)}`)
-                                  }}
-                                >
-                                  <List.Item.Meta
-                                    title={
-                                      <span style={{ color: '#1677ff' }}>
-                                        {entry.isNew && <span style={{ width: 6, height: 6, background: '#1677ff', borderRadius: '50%', display: 'inline-block', marginRight: 6 }} />}
-                                        {entry.title} <RightOutlined style={{ fontSize: 10 }} />
-                                      </span>
-                                    }
-                                    description={
-                                      <Space size={4}>
-                                        <Tag color="blue" style={{ fontSize: 10 }}>{entry.category}</Tag>
-                                        {entry.tags?.slice(0, 2).map(t => <Tag key={t} style={{ fontSize: 10 }}>{t}</Tag>)}
-                                      </Space>
-                                    }
-                                  />
-                                </List.Item>
-                              )}
-                            />
-                          </div>
-                        )}
-                        
-                        {/* 笔记文档 */}
-                        {linkedDocs.notes.length > 0 && (
-                          <div>
-                            <Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
-                              笔记 ({linkedDocs.notes.length})
-                            </Text>
-                            <List
-                              size="small"
-                              dataSource={linkedDocs.notes}
-                              renderItem={note => (
-                                <List.Item 
-                                  style={{ cursor: 'pointer' }}
-                                  onClick={() => {
-                                    setDetailDrawerOpen(false)
-                                    navigate(`/notes?docId=${encodeURIComponent(note.id)}`)
-                                  }}
-                                >
-                                  <List.Item.Meta
-                                    title={
-                                      <span style={{ color: '#1677ff' }}>
-                                        {(note as any).isNew && <span style={{ width: 6, height: 6, background: '#1677ff', borderRadius: '50%', display: 'inline-block', marginRight: 6 }} />}
-                                        {note.title} <RightOutlined style={{ fontSize: 10 }} />
-                                      </span>
-                                    }
-                                    description={note.tags?.slice(0, 3).join(', ')}
-                                  />
-                                </List.Item>
-                              )}
-                            />
-                          </div>
-                        )}
-                        
-                        {linkedDocs.knowledge.length === 0 && linkedDocs.notes.length === 0 && (
-                          <Empty 
-                            description="暂无已同步的文档" 
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      <List
+                        size="small"
+                        dataSource={projectData.documents.filter(d => d.type === 'other')}
+                        renderItem={doc => (
+                          <List.Item 
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleViewDocument(doc, selectedProject!)}
                           >
-                            <Button 
-                              type="primary" 
-                              size="small"
-                              icon={<SyncOutlined />}
-                              onClick={() => {
-                                setDetailDrawerOpen(false)
-                                handleSyncProject(selectedProject!)
-                              }}
-                            >
-                              立即同步
-                            </Button>
-                          </Empty>
+                            <List.Item.Meta
+                              title={<span style={{ color: '#1677ff' }}>{doc.title} <RightOutlined style={{ fontSize: 10 }} /></span>}
+                              description={(doc.tags || []).slice(0, 3).join(', ')}
+                            />
+                          </List.Item>
                         )}
-                      </div>
+                        locale={{ emptyText: '暂无其他文档' }}
+                      />
                     ),
                   },
                 ]}
@@ -1941,6 +2325,155 @@ export function Projects() {
         )}
       </Drawer>
 
+      {/* 一键加载配置弹窗 */}
+      <Modal
+        title="一键加载配置"
+        open={loadConfigModalOpen}
+        onCancel={() => !loadConfigLoading && setLoadConfigModalOpen(false)}
+        footer={
+          loadConfigProgress ? null : (
+            <Space>
+              <Button onClick={() => setLoadConfigModalOpen(false)} disabled={loadConfigLoading}>取消</Button>
+              <Button
+                type="primary"
+                loading={loadConfigLoading}
+                onClick={handleExecuteLoadConfigBulk}
+                disabled={(loadConfigOnlyUninit ? filteredProjects.filter(p => !p.hasSil) : filteredProjects).length === 0}
+              >
+                开始加载
+              </Button>
+            </Space>
+          )
+        }
+        width={520}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Checkbox
+            checked={loadConfigOnlyUninit}
+            onChange={e => setLoadConfigOnlyUninit(e.target.checked)}
+          >
+            仅未初始化的项目
+          </Checkbox>
+        </div>
+        {loadConfigProgress ? (
+          <Progress
+            percent={Math.round((loadConfigProgress.current / loadConfigProgress.total) * 100)}
+            status="active"
+            format={() => `${loadConfigProgress.current}/${loadConfigProgress.total} ${loadConfigProgress.step}`}
+          />
+        ) : (
+          <List
+            size="small"
+            dataSource={loadConfigOnlyUninit ? filteredProjects.filter(p => !p.hasSil) : filteredProjects}
+            renderItem={p => (
+              <List.Item>
+                <span>{getProjectDisplayName(p)}</span>
+                <Tag color="blue" style={{ marginLeft: 8 }}>{allProjectTypes.find(t => t.id === p.projectType)?.name || p.projectType}</Tag>
+              </List.Item>
+            )}
+            style={{ maxHeight: 280, overflow: 'auto' }}
+          />
+        )}
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+          将为各项目写入 project.yaml 并创建/更新 .nexus 目录（notes、模板子目录等），所有项目使用同一份模板配置（见「模板设置」）。
+        </Text>
+      </Modal>
+
+      {/* 无法归类到现有类型：创建新类型或选择已有 */}
+      <Modal
+        title="无法归类到现有类型"
+        open={!!pendingUnclassified}
+        onCancel={() => { setPendingUnclassified(null); setPendingGithubUnclassified(null) }}
+        footer={null}
+        width={520}
+      >
+        {pendingUnclassified && (
+          <div style={{ marginBottom: 16 }}>
+            <Paragraph>
+              AI 分析认为该项目<strong>无法归入</strong>现有类型，建议新类型：
+              <strong> {pendingUnclassified.suggestedNewTypeName || pendingUnclassified.projectType}</strong>
+              {pendingUnclassified.projectType && (
+                <span style={{ color: '#888', fontSize: 12 }}>（{pendingUnclassified.projectType}）</span>
+              )}
+            </Paragraph>
+            <Segmented
+              block
+              options={[
+                { value: 'create', label: '创建新类型并归类' },
+                { value: 'choose', label: '强制归属到已有类型' },
+              ]}
+              value={unclassifiedResolveType}
+              onChange={v => setUnclassifiedResolveType(v as 'create' | 'choose')}
+              style={{ marginBottom: 16 }}
+            />
+            {unclassifiedResolveType === 'create' && (
+              <div>
+                <Input
+                  placeholder="新类型名称"
+                  value={newTypeName}
+                  onChange={e => setNewTypeName(e.target.value)}
+                  style={{ marginBottom: 12 }}
+                />
+                <Button type="primary" loading={unclassifiedSubmitting} onClick={handleUnclassifiedCreateType}>
+                  创建新类型并添加项目
+                </Button>
+              </div>
+            )}
+            {unclassifiedResolveType === 'choose' && (
+              <div>
+                <div style={{ marginBottom: 8 }}>选择要归属的类型（下列为 AI 推荐占比）：</div>
+                <Select
+                  placeholder="选择类型"
+                  style={{ width: '100%', marginBottom: 12 }}
+                  value={selectedExistingTypeId || undefined}
+                  onChange={setSelectedExistingTypeId}
+                  options={allProjectTypes.map(t => {
+                    const pct = pendingUnclassified.confidenceByType?.[t.id]
+                    const label = pct != null ? `${t.name}（推荐 ${Math.round(pct * 100)}%）` : t.name
+                    return { value: t.id, label }
+                  })}
+                />
+                <Button
+                  type="primary"
+                  loading={unclassifiedSubmitting}
+                  onClick={handleUnclassifiedChooseExisting}
+                  disabled={!selectedExistingTypeId}
+                >
+                  确认并添加项目
+                </Button>
+              </div>
+            )}
+            <Button style={{ marginLeft: 8 }} onClick={() => setPendingUnclassified(null)}>取消</Button>
+          </div>
+        )}
+      </Modal>
+
+      {/* 清空所有笔记/知识库并删除各项目 .nexus */}
+      <Modal
+        title="清空并重置"
+        open={resetAllModalOpen}
+        onCancel={() => !resetAllLoading && setResetAllModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setResetAllModalOpen(false)} disabled={resetAllLoading}>取消</Button>,
+          <Popconfirm
+            key="confirm"
+            title="确定执行？"
+            description="将删除所有笔记与知识库文档，并删除每个项目内的 .nexus 目录。项目列表保留，之后可用「一键加载配置」重新配置。"
+            onConfirm={handleResetAllSyncData}
+            okText="确认执行"
+            okButtonProps={{ danger: true }}
+          >
+            <Button type="primary" danger loading={resetAllLoading}>清空并重置</Button>
+          </Popconfirm>,
+        ]}
+        width={480}
+      >
+        <Paragraph type="secondary">
+          将执行：① 清空 ~/.nexus 下的所有笔记与知识库文档；② 删除当前已导入项目中每个项目内的 <code>.nexus</code> 目录（project.yaml、templates.json、notes 等）。
+          <br />项目列表不会删除，之后可在本页使用「一键加载配置」重新为项目写入配置。
+        </Paragraph>
+      </Modal>
+
       {/* 导入成功弹窗 */}
       <Modal
         title={
@@ -1960,12 +2493,12 @@ export function Projects() {
             <div className={styles.detailInfoCard}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <span style={{ fontSize: 24 }}>
-                  {PROJECT_TYPES.find(t => t.id === importedProject.projectType)?.icon || '📁'}
+                  {allProjectTypes.find(t => t.id === importedProject.projectType)?.icon || '📁'}
                 </span>
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{importedProject.name}</div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {PROJECT_TYPES.find(t => t.id === importedProject.projectType)?.name || '未知类型'}
+                    {allProjectTypes.find(t => t.id === importedProject.projectType)?.name || '未知类型'}
                   </Text>
                 </div>
               </div>
@@ -2032,6 +2565,21 @@ export function Projects() {
               </Button>
             </div>
             
+            {/* 对分类不满意时可再次分析 */}
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-primary, #333)' }}>
+              <Button
+                size="small"
+                icon={<ThunderboltOutlined />}
+                loading={reAnalyzingImport}
+                onClick={handleReAnalyzeImported}
+              >
+                对分类不满意？再次分析
+              </Button>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>
+                将重新用 AI 分析项目并更新分类、名称、描述等；若分类变化会移动项目到对应类型目录
+              </Text>
+            </div>
+
             {/* 提示信息 */}
             <div className={styles.modalTipBox} style={{ marginTop: 16 }}>
               <Text type="secondary" style={{ fontSize: 12 }}>
@@ -2043,6 +2591,7 @@ export function Projects() {
         )}
       </Modal>
     </div>
+    </>
   )
 }
 

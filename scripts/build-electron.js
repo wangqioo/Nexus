@@ -13,6 +13,14 @@ if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true })
 }
 
+// 复制模板目录（模板即唯一真相，供种子与回退使用）
+const templatesDefault = path.join(electronDir, 'templates-default')
+const templatesOut = path.join(outDir, 'templates-default')
+if (fs.existsSync(templatesDefault)) {
+  fs.cpSync(templatesDefault, templatesOut, { recursive: true })
+  console.log('Copied electron/templates-default -> dist-electron/templates-default')
+}
+
 // 使用 esbuild 编译 Electron 代码 (更快)
 try {
   execSync('npx esbuild electron/main.ts electron/preload.ts --outdir=dist-electron --platform=node --format=cjs --bundle --external:electron', {

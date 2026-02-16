@@ -11,19 +11,23 @@ import {
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../../services/storage'
 import type { KnowledgeEntry, ProjectType } from '../../types'
-import { PROJECT_TYPES, KNOWLEDGE_CATEGORIES } from '../../types'
+import { PROJECT_TYPES, FIXED_KNOWLEDGE_CATEGORIES, KNOWLEDGE_CATEGORIES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
 import styles from './Knowledge.module.css'
 
 const { Title, Text, Paragraph } = Typography
 const { TextArea } = Input
 
+/** 各项目类型对应的知识分类（固定 4 类，后端统一返回） */
+type CategoriesMap = Record<string, { id: string; name: string; icon: string }[]>
+
 export function Knowledge() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [entries, setEntries] = useState<KnowledgeEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [categoriesByType, setCategoriesByType] = useState<CategoriesMap | null>(null)
   
-  // 筛选
+  // 筛选：项目类型 + 知识库固定 4 类
   const [selectedType, setSelectedType] = useState<ProjectType | 'all'>('all')
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -42,36 +46,50 @@ export function Knowledge() {
     loadData()
   }, [])
 
-  // 处理 URL 参数打开指定文档
+  // 带 docId 进入时先刷新知识列表（避免刚同步后跳转时列表未更新）
+  const docIdFromUrl = searchParams.get('docId')
+  useEffect(() => {
+    if (docIdFromUrl) {
+      loadData()
+    }
+  }, [docIdFromUrl])
+
+  // 处理 URL 参数打开指定文档（仅在加载完成后执行，避免用旧列表误判）
   useEffect(() => {
     const docId = searchParams.get('docId')
-    if (docId && entries.length > 0 && !loading) {
-      // 查找匹配的文档（多种匹配方式）
-      const entry = entries.find(e => {
-        if (!e.id) return false
-        // 精确匹配
-        if (e.id === docId) return true
-        // 包含匹配（处理可能的格式差异）
-        if (e.id.includes(docId) || docId.includes(e.id)) return true
-        // 忽略大小写匹配
-        if (e.id.toLowerCase() === docId.toLowerCase()) return true
-        return false
-      })
-      
-      if (entry) {
-        setDetailEntry(entry)
-        setDrawerOpen(true)
-      } else {
-        message.info('未找到对应的知识条目，可能尚未同步')
-      }
-      // 清除 URL 参数
-      setSearchParams({})
+    if (!docId || loading) return
+
+    const entry = entries.find(e => {
+      if (!e.id) return false
+      if (e.id === docId) return true
+      if (e.id.includes(docId) || docId.includes(e.id)) return true
+      if (e.id.toLowerCase() === docId.toLowerCase()) return true
+      return false
+    })
+
+    if (entry) {
+      setDetailEntry(entry)
+      setDrawerOpen(true)
+    } else {
+      message.info('未找到对应的知识条目，可能尚未同步')
     }
+    setSearchParams({})
   }, [entries, searchParams, loading])
 
   const loadData = async () => {
     setLoading(true)
     try {
+      let categoriesByType: CategoriesMap | null = null
+      if (typeof window !== 'undefined' && window.electronAPI?.getKnowledgeCategoriesForType) {
+        const types: ProjectType[] = PROJECT_TYPES.map(t => t.id)
+        const map: CategoriesMap = {}
+        await Promise.all(
+          types.map(async (t) => {
+            map[t] = await window.electronAPI.getKnowledgeCategoriesForType(t)
+          })
+        )
+        setCategoriesByType(map)
+      }
       const data = await storage.listAllKnowledge()
       setEntries(data)
     } catch (e) {
@@ -80,48 +98,21 @@ export function Knowledge() {
     setLoading(false)
   }
 
-  // 当前类型的分类列表
-  const currentCategories = useMemo(() => {
-    if (selectedType === 'all') {
-      // 全部模式: 根据实际有数据的条目，提取出涉及的所有分类（带项目类型前缀区分）
-      const seen = new Set<string>()
-      const result: { id: string; name: string; icon: string }[] = []
-      for (const entry of entries) {
-        const cats = KNOWLEDGE_CATEGORIES[entry.projectType] || []
-        const cat = cats.find(c => c.id === entry.category)
-        if (cat && !seen.has(entry.category)) {
-          seen.add(entry.category)
-          result.push(cat)
-        }
-      }
-      return result
-    }
-    return KNOWLEDGE_CATEGORIES[selectedType] || []
-  }, [selectedType, entries])
-
-  // 过滤
   const filteredEntries = useMemo(() => {
     let filtered = [...entries]
-    
-    if (selectedType !== 'all') {
-      filtered = filtered.filter(e => e.projectType === selectedType)
-    }
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(e => e.category === selectedCategory)
-    }
+    if (selectedType !== 'all') filtered = filtered.filter(e => e.projectType === selectedType)
+    if (selectedCategory !== 'all') filtered = filtered.filter(e => (e.category || 'other') === selectedCategory)
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      filtered = filtered.filter(e => 
+      filtered = filtered.filter(e =>
         (e.title || '').toLowerCase().includes(q) ||
         (e.content || '').toLowerCase().includes(q) ||
         (e.tags || []).some(t => t.toLowerCase().includes(q))
       )
     }
-    
     return filtered
   }, [entries, selectedType, selectedCategory, searchQuery])
 
-  // 统计
   const typeStats = useMemo(() => {
     const stats: Record<string, number> = { all: entries.length }
     for (const e of entries) {
@@ -132,10 +123,11 @@ export function Knowledge() {
 
   const categoryStats = useMemo(() => {
     const stats: Record<string, number> = { all: 0 }
-    const filtered = selectedType === 'all' ? entries : entries.filter(e => e.projectType === selectedType)
-    stats.all = filtered.length
-    for (const e of filtered) {
-      stats[e.category] = (stats[e.category] || 0) + 1
+    const base = selectedType === 'all' ? entries : entries.filter(e => e.projectType === selectedType)
+    stats.all = base.length
+    for (const e of base) {
+      const cat = e.category || 'other'
+      stats[cat] = (stats[cat] || 0) + 1
     }
     return stats
   }, [entries, selectedType])
@@ -147,12 +139,12 @@ export function Knowledge() {
 
   // 获取分类名称
   const getCategoryName = (type: ProjectType, category: string) => {
-    const cats = KNOWLEDGE_CATEGORIES[type] || []
+    const cats = categoriesByType?.[type] ?? KNOWLEDGE_CATEGORIES[type] ?? []
     return cats.find(c => c.id === category)?.name || category
   }
 
   const getCategoryIcon = (type: ProjectType, category: string) => {
-    const cats = KNOWLEDGE_CATEGORIES[type] || []
+    const cats = categoriesByType?.[type] ?? KNOWLEDGE_CATEGORIES[type] ?? []
     return cats.find(c => c.id === category)?.icon || '📄'
   }
 
@@ -180,11 +172,10 @@ export function Knowledge() {
     }
   }
 
-  // 新建
   const handleAdd = () => {
     setEditingEntry(null)
     form.resetFields()
-    form.setFieldsValue({ projectType: 'mcu', category: 'debug' })
+    form.setFieldsValue({ projectType: 'mcu', category: FIXED_KNOWLEDGE_CATEGORIES[0]?.id || 'debug' })
     setFormType('mcu')
     setModalOpen(true)
   }
@@ -205,17 +196,15 @@ export function Knowledge() {
     setDrawerOpen(false)
   }
 
-  // 保存
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
-      
       const entry: KnowledgeEntry = {
         id: editingEntry?.id || uuidv4(),
         title: values.title,
         content: values.content || '',
         projectType: values.projectType,
-        category: values.category,
+        category: values.category || 'other',
         tags: values.tags ? values.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
         severity: values.severity,
         createdAt: editingEntry?.createdAt || new Date().toISOString(),
@@ -315,16 +304,9 @@ export function Knowledge() {
         </div>
       </div>
 
-      {/* ====== 小类别：知识分类 ====== */}
+      {/* 知识分类：固定 4 类 */}
       <div className={styles.categorySection}>
-        <div className={styles.sectionLabel}>
-          知识分类
-          {selectedType !== 'all' && (
-            <span className={styles.sectionLabelSub}>
-              {' '}— {getProjectTypeIcon(selectedType, getTypeConfig(selectedType)?.icon || '')} {getTypeConfig(selectedType)?.name}
-            </span>
-          )}
-        </div>
+        <div className={styles.sectionLabel}>知识分类</div>
         <div className={styles.categoryBar}>
           <span
             className={`${styles.categoryTag} ${selectedCategory === 'all' ? styles.categoryTagActive : ''}`}
@@ -332,7 +314,7 @@ export function Knowledge() {
           >
             全部 {categoryStats.all || 0}
           </span>
-          {currentCategories.map(cat => (
+          {FIXED_KNOWLEDGE_CATEGORIES.map(cat => (
             <span
               key={cat.id}
               className={`${styles.categoryTag} ${selectedCategory === cat.id ? styles.categoryTagActive : ''}`}
@@ -386,9 +368,11 @@ export function Knowledge() {
                     >
                       {getProjectTypeIcon(entry.projectType, typeConfig?.icon || '')} {typeConfig?.name}
                     </span>
-                    <span className={styles.categoryBadge}>
-                      {getCategoryIcon(entry.projectType, entry.category)} {getCategoryName(entry.projectType, entry.category)}
-                    </span>
+                    {entry.category && (
+                      <span className={styles.categoryBadge} title="笔记标签（仅展示）">
+                        {getCategoryIcon(entry.projectType, entry.category)} {getCategoryName(entry.projectType, entry.category)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 
@@ -472,7 +456,9 @@ export function Knowledge() {
                   <Tag color={tc.color}>{tc.icon} {tc.name}</Tag>
                 ) : null
               })()}
-              <Tag>{getCategoryIcon(detailEntry.projectType, detailEntry.category)} {getCategoryName(detailEntry.projectType, detailEntry.category)}</Tag>
+              {detailEntry.category && (
+                <Tag>{getCategoryIcon(detailEntry.projectType, detailEntry.category)} {getCategoryName(detailEntry.projectType, detailEntry.category)}</Tag>
+              )}
               {detailEntry.severity && (
                 <Tag color={getSeverityColor(detailEntry.severity)}>{detailEntry.severity}</Tag>
               )}
@@ -543,12 +529,12 @@ export function Knowledge() {
             
             <Form.Item 
               name="category" 
-              label="分类" 
-              rules={[{ required: true }]}
+              label="知识分类（4 类）" 
+              rules={[{ required: true, message: '请选择分类' }]}
               style={{ flex: 1 }}
             >
               <Select>
-                {(KNOWLEDGE_CATEGORIES[formType] || []).map(cat => (
+                {FIXED_KNOWLEDGE_CATEGORIES.map(cat => (
                   <Select.Option key={cat.id} value={cat.id}>
                     {cat.icon} {cat.name}
                   </Select.Option>

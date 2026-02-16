@@ -1,31 +1,37 @@
 const http = require('http')
+const fs = require('fs')
+const path = require('path')
 
-const MAX_RETRIES = 30
-const RETRY_INTERVAL = 1000
+const MAX_RETRIES = 60
+const RETRY_INTERVAL = 500
+const portFile = path.join(__dirname, '..', '.vite-dev-port')
 
-function checkServer(retries = 0) {
+function waitForPortFile(retries = 0) {
   return new Promise((resolve, reject) => {
-    const req = http.get('http://localhost:5173', (res) => {
+    if (fs.existsSync(portFile)) {
+      try {
+        const port = parseInt(fs.readFileSync(portFile, 'utf-8').trim(), 10)
+        if (port > 0) return resolve(port)
+      } catch (_) {}
+    }
+    if (retries >= MAX_RETRIES) return reject(new Error('Vite port file did not appear in time'))
+    setTimeout(() => waitForPortFile(retries + 1).then(resolve).catch(reject), RETRY_INTERVAL)
+  })
+}
+
+function checkServer(port) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(`http://localhost:${port}`, (res) => {
       console.log('Vite server is ready!')
       resolve()
     })
-
-    req.on('error', () => {
-      if (retries < MAX_RETRIES) {
-        console.log(`Waiting for Vite server... (${retries + 1}/${MAX_RETRIES})`)
-        setTimeout(() => {
-          checkServer(retries + 1).then(resolve).catch(reject)
-        }, RETRY_INTERVAL)
-      } else {
-        reject(new Error('Vite server did not start in time'))
-      }
-    })
-
+    req.on('error', reject)
     req.end()
   })
 }
 
-checkServer()
+waitForPortFile()
+  .then((port) => checkServer(port))
   .then(() => process.exit(0))
   .catch((err) => {
     console.error(err.message)

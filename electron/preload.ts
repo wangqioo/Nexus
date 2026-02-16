@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 项目导入 (绝对路径)
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
+  selectConfigFile: () => ipcRenderer.invoke('dialog:selectConfigFile'),
+  parseProjectConfig: (content: string) => ipcRenderer.invoke('config:parseProjectConfig', content),
   analyzeProject: (path: string) => ipcRenderer.invoke('project:analyze', path),
   readProjectFile: (path: string) => ipcRenderer.invoke('project:readFile', path),
   writeProjectFile: (path: string, content: string) => ipcRenderer.invoke('project:writeFile', path, content),
@@ -31,8 +33,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('project:verifyPaths', projects),
   
   // Git 操作
-  gitClone: (url: string, targetPath: string, branch?: string) => 
+  gitClone: (url: string, targetPath: string, branch?: string) =>
     ipcRenderer.invoke('git:clone', url, targetPath, branch),
+  onGitCloneProgress: (callback: (data: { percent: number; speedText: string }) => void) => {
+    const fn = (_: unknown, data: { percent: number; speedText: string }) => callback(data)
+    ipcRenderer.on('git:clone:progress', fn)
+    return () => ipcRenderer.removeListener('git:clone:progress', fn)
+  },
   gitPull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
   gitStatus: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
   
@@ -53,9 +60,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   
   // 项目目录管理
-  moveToTypeDir: (sourcePath: string, projectType: string, projectName: string) =>
-    ipcRenderer.invoke('project:moveToTypeDir', sourcePath, projectType, projectName),
+  moveToTypeDir: (sourcePath: string, projectType: string, projectName?: string) =>
+    ipcRenderer.invoke('project:moveToTypeDir', sourcePath, projectType, projectName ?? ''),
+  renameFolderToMatchName: (projectPath: string, projectDisplayName: string) =>
+    ipcRenderer.invoke('project:renameFolderToMatchName', projectPath, projectDisplayName),
   getTypeDir: (projectType: string) => ipcRenderer.invoke('project:getTypeDir', projectType),
+  getCustomProjectTypes: () => ipcRenderer.invoke('project:getCustomTypes'),
+  addCustomProjectType: (payload: { id: string; name: string; icon?: string; color?: string }) =>
+    ipcRenderer.invoke('project:addCustomType', payload),
   deleteProjectDir: (projectPath: string) => ipcRenderer.invoke('project:deleteDir', projectPath),
   
   // .nexus 项目管理
@@ -63,17 +75,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('sil:init', projectPath, config),
   scanSilProject: (projectPath: string) => 
     ipcRenderer.invoke('sil:scan', projectPath),
-  syncFromProject: (projectPath: string, apiKey?: string, projectType?: string) => 
+  syncFromProject: (projectPath: string, apiKey?: string, projectType?: string) =>
     ipcRenderer.invoke('sil:syncFrom', projectPath, apiKey, projectType),
   syncToProject: (projectPath: string, data: any) => 
     ipcRenderer.invoke('sil:syncTo', projectPath, data),
   checkPendingSync: (projectPath: string, projectType?: string) =>
     ipcRenderer.invoke('sil:checkPending', projectPath, projectType),
+  checkRemovedDocs: (projectPath: string, payload: { knowledge: Array<{ id: string; category: string; projectType: string }>; notes: string[] }) =>
+    ipcRenderer.invoke('sil:checkRemovedDocs', projectPath, payload),
   reverseSyncToProjects: () =>
     ipcRenderer.invoke('sil:reverseSync'),
   clearKnowledgeBase: () =>
     ipcRenderer.invoke('knowledge:clear'),
-  
+  /** 清空中央笔记/知识库并删除所有项目内的 .nexus，便于重新配置 */
+  resetAllSyncData: () =>
+    ipcRenderer.invoke('sil:resetAllSyncData'),
+  removeNexusDir: (projectPath: string) =>
+    ipcRenderer.invoke('sil:removeNexusDir', projectPath),
+  getKnowledgeCategoriesForType: (projectType: string) =>
+    ipcRenderer.invoke('knowledge:getCategoriesForType', projectType),
+
   // 同步进度监听
   onSyncProgress: (callback: (progress: { step: string; current: number; total: number; file?: string }) => void) => {
     const handler = (_: any, progress: any) => callback(progress)

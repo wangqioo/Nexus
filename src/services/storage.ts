@@ -79,10 +79,11 @@ async function deleteFilePath(path: string): Promise<boolean> {
 
 // ============================================================
 // 知识库 (KnowledgeEntry) - 核心 API
-// 目录结构: knowledge/{projectType}/{category}/{id}.json
+// 分类仅按项目类型：knowledge/{projectType}/*.json（扁平），category 仅作笔记标签展示
+// 兼容旧结构 knowledge/{projectType}/{category}/*.json
 // ============================================================
 
-// Markdown -> KnowledgeEntry (用于读取 .md 文件)
+// Markdown -> KnowledgeEntry (用于读取 .md 文件，仅旧数据兼容)
 async function readMarkdownAsKnowledge(
   filePath: string, 
   filename: string, 
@@ -92,10 +93,8 @@ async function readMarkdownAsKnowledge(
   try {
     const parsed = await window.electronAPI.readMarkdown(filePath)
     if (!parsed) return null
-    
     const fm = parsed.frontmatter || {}
     const id = filename.replace('.md', '')
-    
     return {
       id: `${projectType}-${category}-${id}`,
       title: fm.title || id.replace(/-/g, ' '),
@@ -105,10 +104,7 @@ async function readMarkdownAsKnowledge(
       tags: fm.tags || [],
       severity: fm.severity,
       sourceProject: fm.project || fm.sourceProject,
-      metadata: {
-        ...fm,
-        _source: `md-${filePath}`,
-      },
+      metadata: { ...fm, _source: `md-${filePath}` },
       createdAt: fm.created || parsed.createdAt,
       updatedAt: parsed.updatedAt,
     }
@@ -118,41 +114,60 @@ async function readMarkdownAsKnowledge(
   }
 }
 
-// 统一获取所有知识条目
-async function listAllKnowledge(type?: ProjectType, category?: string): Promise<KnowledgeEntry[]> {
+/** 知识分类按项目类型键缓存（固定 4 类，仅用于展示名称） */
+export type CategoriesByType = Record<string, { id: string }[]>
+
+// 统一获取所有知识条目（扁平 + 兼容旧子目录）
+// 类型目录动态从 knowledge/ 下列出，以支持自定义项目类型（如 game、iot）
+async function listAllKnowledge(
+  type?: ProjectType,
+  _category?: string,
+  _categoriesByType?: CategoriesByType
+): Promise<KnowledgeEntry[]> {
   const entries: KnowledgeEntry[] = []
-  const types: ProjectType[] = type 
-    ? [type] 
-    : ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
+  let types: string[]
+  if (type) {
+    types = [type]
+  } else {
+    try {
+      const topDirs = await listDir('knowledge')
+      types = topDirs.filter(d => !d.includes('.')) // 只取子目录名（如 mcu、software、game）
+    } catch {
+      types = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
+    }
+  }
   
   for (const t of types) {
-    const cats = category ? [category] : KNOWLEDGE_CATEGORIES[t]?.map(c => c.id) || []
+    let items: string[] = []
+    try {
+      items = await listDir(`knowledge/${t}`)
+    } catch { continue }
     
-    for (const cat of cats) {
-      const dirPath = `knowledge/${t}/${cat}`
-      let files: string[] = []
-      try {
-        files = await listDir(dirPath)
-      } catch { continue }
-      
-      const readPromises = files.map(async (file) => {
-        if (file.endsWith('.json')) {
-          const data = await readJSON<KnowledgeEntry>(`${dirPath}/${file}`)
-          if (!data) return null
-          return {
-            ...data,
-            projectType: data.projectType || t,
-            category: data.category || cat,
-          } as KnowledgeEntry
-        } else if (file.endsWith('.md') && isElectron()) {
-          return readMarkdownAsKnowledge(`${dirPath}/${file}`, file, t, cat)
+    for (const item of items) {
+      if (item.endsWith('.json')) {
+        const data = await readJSON<KnowledgeEntry>(`knowledge/${t}/${item}`)
+        if (!data) continue
+        entries.push({
+          ...data,
+          projectType: data.projectType || t,
+          category: data.category || 'other',
+        } as KnowledgeEntry)
+      } else if (!item.includes('.')) {
+        // 旧结构：子目录
+        let files: string[] = []
+        try {
+          files = await listDir(`knowledge/${t}/${item}`)
+        } catch { continue }
+        for (const file of files) {
+          if (file.endsWith('.json')) {
+            const data = await readJSON<KnowledgeEntry>(`knowledge/${t}/${item}/${file}`)
+            if (!data) continue
+            entries.push({ ...data, projectType: data.projectType || t, category: data.category || item } as KnowledgeEntry)
+          } else if (file.endsWith('.md') && isElectron()) {
+            const e = await readMarkdownAsKnowledge(`knowledge/${t}/${item}/${file}`, file, t as ProjectType, item)
+            if (e) entries.push(e)
+          }
         }
-        return null
-      })
-      
-      const results = await Promise.all(readPromises)
-      for (const item of results) {
-        if (item) entries.push(item)
       }
     }
   }
@@ -160,19 +175,22 @@ async function listAllKnowledge(type?: ProjectType, category?: string): Promise<
   return entries.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
 
-// 保存知识条目
+// 保存知识条目（扁平路径）
 async function saveKnowledgeEntry(entry: KnowledgeEntry): Promise<boolean> {
-  const dirPath = `knowledge/${entry.projectType}/${entry.category}`
+  const dirPath = `knowledge/${entry.projectType}`
   const safeId = entry.id.replace(/[^a-zA-Z0-9_-]/g, '-')
   return writeJSON(`${dirPath}/${safeId}.json`, entry)
 }
 
-// 删除知识条目
+// 删除知识条目（先试扁平路径，再试旧路径）
 async function deleteKnowledgeEntry(entry: KnowledgeEntry): Promise<boolean> {
   const safeId = entry.id.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const jsonResult = await deleteFilePath(`knowledge/${entry.projectType}/${entry.category}/${safeId}.json`)
+  const flatPath = `knowledge/${entry.projectType}/${safeId}.json`
+  const jsonResult = await deleteFilePath(flatPath)
   if (jsonResult) return true
-  return deleteFilePath(`knowledge/${entry.projectType}/${entry.category}/${safeId}.md`)
+  const legacyPath = `knowledge/${entry.projectType}/${entry.category || 'other'}/${safeId}.json`
+  if (await deleteFilePath(legacyPath)) return true
+  return deleteFilePath(`knowledge/${entry.projectType}/${entry.category || 'other'}/${safeId}.md`)
 }
 
 // 知识库统计
@@ -279,6 +297,8 @@ async function deleteNote(id: string): Promise<boolean> {
 async function getDocumentsByProject(projectPath: string): Promise<{
   knowledge: KnowledgeEntry[]
   notes: Note[]
+  removedKnowledge: KnowledgeEntry[]
+  removedNotes: Note[]
 }> {
   const [allKnowledge, allNotes] = await Promise.all([
     listAllKnowledge(),
@@ -303,7 +323,30 @@ async function getDocumentsByProject(projectPath: string): Promise<{
            source === projectName
   })
   
-  return { knowledge, notes }
+  let removedKnowledge: KnowledgeEntry[] = []
+  let removedNotes: Note[] = []
+  if (isElectron() && typeof window.electronAPI.checkRemovedDocs === 'function') {
+    try {
+      const { removedKnowledgeIds, removedNoteIds } = await window.electronAPI.checkRemovedDocs(projectPath, {
+        knowledge: knowledge.map(e => ({ id: e.id, category: e.category, projectType: e.projectType })),
+        notes: notes.map(n => n.id),
+      })
+      removedKnowledge = knowledge.filter(e => removedKnowledgeIds.includes(e.id))
+      removedNotes = notes.filter(n => removedNoteIds.includes(n.id))
+    } catch (_) {}
+  }
+  const linkedKnowledge = removedKnowledge.length || removedNotes.length
+    ? knowledge.filter(e => !removedKnowledge.some(r => r.id === e.id))
+    : knowledge
+  const linkedNotes = removedKnowledge.length || removedNotes.length
+    ? notes.filter(n => !removedNotes.some(r => r.id === n.id))
+    : notes
+  return {
+    knowledge: linkedKnowledge,
+    notes: linkedNotes,
+    removedKnowledge,
+    removedNotes,
+  }
 }
 
 // ============================================================

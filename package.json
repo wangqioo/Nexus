@@ -9,9 +9,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "electron:dev": "concurrently -k \"vite\" \"node scripts/wait-vite.js && npm run electron:start\"",
+    "vite:dev": "node --no-deprecation node_modules/vite/bin/vite.js",
+    "electron:dev": "concurrently -k \"npm run vite:dev\" \"node scripts/wait-vite.js && npm run electron:start\"",
     "electron:start": "node scripts/build-electron.js && electron .",
-    "electron:build": "npm run build && node scripts/build-electron.js && electron-builder",
+    "electron:start:prod": "npm run build && node scripts/build-electron.js && NODE_ENV=production electron .",
+    "electron:build": "npm run build && node scripts/build-electron.js && electron-builder --mac",
     "electron:build:mac": "npm run build && node scripts/build-electron.js && electron-builder --mac",
     "electron:build:win": "npm run build && node scripts/build-electron.js && electron-builder --win",
     "electron:build:linux": "npm run build && node scripts/build-electron.js && electron-builder --linux"

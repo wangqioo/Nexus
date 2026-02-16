@@ -12,8 +12,9 @@ import { v4 as uuidv4 } from 'uuid'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { storage } from '../../services/storage'
-import type { Note } from '../../types'
-import { NOTE_CATEGORIES } from '../../types'
+import type { Note, ProjectType } from '../../types'
+import { NOTE_CATEGORIES, PROJECT_TYPES } from '../../types'
+import { getProjectTypeIcon } from '../../components/Icons'
 import styles from './Notes.module.css'
 
 const { Title, Text } = Typography
@@ -35,8 +36,8 @@ export function Notes() {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 筛选
-  const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all')
+  // 筛选：按项目类型分类
+  const [selectedProjectType, setSelectedProjectType] = useState<ProjectType | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   // 详情抽屉
@@ -52,31 +53,35 @@ export function Notes() {
     loadData()
   }, [])
 
-  // 处理 URL 参数打开指定笔记
+  // 带 docId 进入时先刷新笔记列表（避免刚同步后跳转时列表未更新）
+  const docIdFromUrl = searchParams.get('docId')
+  useEffect(() => {
+    if (docIdFromUrl) {
+      loadData()
+    }
+  }, [docIdFromUrl])
+
+  // 处理 URL 参数打开指定笔记（仅在加载完成后执行，避免用旧列表误判）
   useEffect(() => {
     const docId = searchParams.get('docId')
-    if (docId && notes.length > 0 && !loading) {
-      // 查找匹配的笔记（多种匹配方式）
-      const note = notes.find(n => {
-        if (!n.id) return false
-        // 精确匹配
-        if (n.id === docId) return true
-        // 包含匹配（处理可能的格式差异）
-        if (n.id.includes(docId) || docId.includes(n.id)) return true
-        // 忽略大小写匹配
-        if (n.id.toLowerCase() === docId.toLowerCase()) return true
-        return false
-      })
-      
-      if (note) {
-        setDetailNote(note)
-        setDrawerOpen(true)
-      } else {
-        message.info('未找到对应的笔记，可能尚未同步')
-      }
-      // 清除 URL 参数
-      setSearchParams({})
+    if (!docId || loading) return
+
+    // 查找匹配的笔记（多种匹配方式）
+    const note = notes.find(n => {
+      if (!n.id) return false
+      if (n.id === docId) return true
+      if (n.id.includes(docId) || docId.includes(n.id)) return true
+      if (n.id.toLowerCase() === docId.toLowerCase()) return true
+      return false
+    })
+
+    if (note) {
+      setDetailNote(note)
+      setDrawerOpen(true)
+    } else {
+      message.info('未找到对应的笔记，可能尚未同步')
     }
+    setSearchParams({})
   }, [notes, searchParams, loading])
 
   const loadData = async () => {
@@ -90,21 +95,19 @@ export function Notes() {
     setLoading(false)
   }
 
-  // 分类统计
-  const categoryStats = useMemo(() => {
+  const typeStats = useMemo(() => {
     const stats: Record<string, number> = { all: notes.length }
     for (const note of notes) {
-      const cat = note.category || 'learning'
-      stats[cat] = (stats[cat] || 0) + 1
+      const t = note.projectType || 'unknown'
+      stats[t] = (stats[t] || 0) + 1
     }
     return stats
   }, [notes])
 
-  // 过滤笔记
   const filteredNotes = useMemo(() => {
     let filtered = [...notes]
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(n => (n.category || 'learning') === selectedCategory)
+    if (selectedProjectType !== 'all') {
+      filtered = filtered.filter(n => (n.projectType || 'unknown') === selectedProjectType)
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -115,7 +118,7 @@ export function Notes() {
       )
     }
     return filtered
-  }, [notes, selectedCategory, searchQuery])
+  }, [notes, selectedProjectType, searchQuery])
 
   // 获取分类信息
   const getCategoryInfo = (catId: string) => {
@@ -229,36 +232,33 @@ export function Notes() {
         </Button>
       </div>
 
-      {/* ====== 分类筛选（与知识库大类别一致） ====== */}
+      {/* ====== 按项目类型分类 ====== */}
       <div className={styles.typeSection}>
-        <div className={styles.sectionLabel}>笔记分类</div>
+        <div className={styles.sectionLabel}>项目类型</div>
         <div className={styles.typeTabs}>
           <div
-            className={`${styles.typeTab} ${selectedCategory === 'all' ? `${styles.typeTabActive} ${styles.typeTabActiveAll}` : ''}`}
-            onClick={() => setSelectedCategory('all')}
+            className={`${styles.typeTab} ${selectedProjectType === 'all' ? `${styles.typeTabActive} ${styles.typeTabActiveAll}` : ''}`}
+            onClick={() => setSelectedProjectType('all')}
           >
             <span className={styles.typeIcon}>📋</span>
             <span className={styles.typeLabel}>全部</span>
-            <span className={styles.typeCount}>{categoryStats.all || 0}</span>
+            <span className={styles.typeCount}>{typeStats.all || 0}</span>
           </div>
-          {NOTE_CATEGORIES.map(cat => {
-            const color = getCategoryColor(cat.id)
-            return (
-              <div
-                key={cat.id}
-                className={`${styles.typeTab} ${selectedCategory === cat.id ? styles.typeTabActive : ''}`}
-                style={selectedCategory === cat.id
-                  ? { background: color, borderColor: color }
-                  : { borderLeftColor: color, borderLeftWidth: 3 }
-                }
-                onClick={() => setSelectedCategory(cat.id)}
-              >
-                <span className={styles.typeIcon}>{cat.icon}</span>
-                <span className={styles.typeLabel}>{cat.name}</span>
-                <span className={styles.typeCount}>{categoryStats[cat.id] || 0}</span>
-              </div>
-            )
-          })}
+          {PROJECT_TYPES.map(type => (
+            <div
+              key={type.id}
+              className={`${styles.typeTab} ${selectedProjectType === type.id ? styles.typeTabActive : ''}`}
+              style={selectedProjectType === type.id
+                ? { background: type.color, borderColor: type.color }
+                : { borderLeftColor: type.color, borderLeftWidth: 3 }
+              }
+              onClick={() => setSelectedProjectType(type.id)}
+            >
+              <span className={styles.typeIcon}>{getProjectTypeIcon(type.id, type.icon)}</span>
+              <span className={styles.typeLabel}>{type.name}</span>
+              <span className={styles.typeCount}>{typeStats[type.id] || 0}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -279,9 +279,11 @@ export function Notes() {
       {filteredNotes.length > 0 ? (
         <div className={styles.cardGrid}>
           {filteredNotes.map(note => {
+            const typeId = note.projectType || 'unknown'
+            const typeConfig = PROJECT_TYPES.find(t => t.id === typeId)
+            const color = typeConfig?.color || '#666'
             const catId = note.category || 'learning'
             const catInfo = getCategoryInfo(catId)
-            const color = getCategoryColor(catId)
             return (
               <Card
                 key={note.id}
@@ -300,8 +302,13 @@ export function Notes() {
                       className={styles.categoryBadge}
                       style={{ backgroundColor: `${color}20`, color }}
                     >
-                      {catInfo?.icon || '📖'} {catInfo?.name || '学习笔记'}
+                      {getProjectTypeIcon(typeId, typeConfig?.icon || '')} {typeConfig?.name || typeId}
                     </span>
+                    {catInfo && (
+                      <span className={styles.categoryBadge} style={{ marginLeft: 8, opacity: 0.9 }}>
+                        {catInfo.icon} {catInfo.name}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -331,8 +338,8 @@ export function Notes() {
             description={
               searchQuery
                 ? `没有找到匹配 "${searchQuery}" 的结果`
-                : selectedCategory !== 'all'
-                  ? `暂无${getCategoryInfo(selectedCategory)?.name || ''}笔记`
+                : selectedProjectType !== 'all'
+                  ? `暂无${PROJECT_TYPES.find(t => t.id === selectedProjectType)?.name || ''}笔记`
                   : '笔记为空，点击"新建笔记"开始记录'
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -374,12 +381,19 @@ export function Notes() {
             <Title level={4} style={{ color: '#e0e0e0', marginBottom: 8 }}>{detailNote.title}</Title>
 
             <div className={styles.detailHeader}>
+              {detailNote.projectType && (() => {
+                const tc = PROJECT_TYPES.find(t => t.id === detailNote!.projectType)
+                return tc ? (
+                  <Tag color={tc.color}>{getProjectTypeIcon(tc.id, tc.icon)} {tc.name}</Tag>
+                ) : (
+                  <Tag>{detailNote.projectType}</Tag>
+                )
+              })()}
               {(() => {
                 const catId = detailNote.category || 'learning'
                 const catInfo = getCategoryInfo(catId)
-                const color = getCategoryColor(catId)
                 return catInfo ? (
-                  <Tag color={color}>{catInfo.icon} {catInfo.name}</Tag>
+                  <Tag>{catInfo.icon} {catInfo.name}</Tag>
                 ) : null
               })()}
               {(detailNote.tags || []).map(tag => (

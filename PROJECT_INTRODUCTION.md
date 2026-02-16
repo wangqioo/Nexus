@@ -169,7 +169,7 @@ Nexus/
 │     - 知识自动归类到对应项目类型                            │
 │                                                             │
 │  3. 写入知识库                                              │
-│     - 知识条目 → ~/.nexus/knowledge/{type}/{category}/      │
+│     - 知识条目 → ~/.nexus/knowledge/{type}/*.json (扁平)    │
 │     - 笔记 → ~/.nexus/notes/                                │
 │     - 建立项目双向索引 (projectPath, projectName)           │
 │                                                             │
@@ -385,7 +385,7 @@ npm run electron:build:linux
 ### 数据存储
 
 所有用户数据存储在 `~/.nexus/` 目录：
-- 知识库：`knowledge/{projectType}/{category}/*.json`
+- 知识库：`knowledge/{projectType}/*.json`（扁平，条目内 category 为 debug/snippet/config/other）
 - 笔记：`notes/*.json`
 - 项目列表：`local-projects.json`
 - 配置：`config.json`

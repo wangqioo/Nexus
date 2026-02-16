@@ -53,6 +53,7 @@ export interface NexusTemplateConfig {
     snippet: DocumentTemplate
     note: DocumentTemplate
     config: DocumentTemplate
+    other: DocumentTemplate
   }
   // 通用设置
   settings: {
@@ -217,6 +218,25 @@ export const DEFAULT_TEMPLATE_CONFIG: NexusTemplateConfig = {
 4. 解释关键参数的含义
 5. 说明使用时需要修改的地方`,
     },
+    other: {
+      id: 'other',
+      name: '其他',
+      icon: 'FolderOutlined',
+      description: '未归入调试/笔记/代码片段/配置时的经验文档',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '标题' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 说明
+<!-- 简要说明 -->
+
+## 内容
+<!-- 详细内容 -->
+`,
+      aiPrompt: `请帮我记录这条经验。要求：标题清晰，内容条理清楚，必要时包含示例或参考。`,
+    },
   },
   settings: {
     autoAddTimestamp: true,
@@ -254,49 +274,22 @@ export interface KnowledgeCategoryDef {
   description: string
 }
 
-// 知识分类体系 - 每种项目类型有自己的分类
+/** 知识库固定 4 类（笔记仅保留在笔记面板/笔记库），.nexus 配置一致 */
+export const FIXED_KNOWLEDGE_CATEGORIES: KnowledgeCategoryDef[] = [
+  { id: 'debug', name: '调试经验', icon: '🐛', description: 'Bug 修复、问题排查经验' },
+  { id: 'snippet', name: '代码片段', icon: '📝', description: '可复用代码与脚本' },
+  { id: 'config', name: '配置模板', icon: '⚙️', description: '配置说明与模板' },
+  { id: 'other', name: '其他', icon: '📁', description: '其他经验文档' },
+]
+
+/** 各类型均使用同一套知识分类（兼容旧代码引用） */
 export const KNOWLEDGE_CATEGORIES: Record<ProjectType, KnowledgeCategoryDef[]> = {
-  mcu: [
-    { id: 'debug', name: '调试经验', icon: '🐛', description: '硬件调试、烧录问题、外设驱动调试' },
-    { id: 'snippet', name: '代码片段', icon: '📝', description: '可复用的驱动代码、初始化模板' },
-    { id: 'peripheral', name: '外设驱动', icon: '🔌', description: '传感器、显示屏、通信模块配置' },
-    { id: 'platform', name: '芯片平台', icon: '🎛️', description: '芯片+框架的组合配置' },
-    { id: 'config', name: '配置模板', icon: '⚙️', description: 'sdkconfig、CMake、Kconfig 模板' },
-  ],
-  ai: [
-    { id: 'model', name: '模型配置', icon: '🧠', description: '模型架构、超参数、训练配置' },
-    { id: 'training', name: '训练经验', icon: '📊', description: '训练技巧、loss 调优、数据增强' },
-    { id: 'inference', name: '推理部署', icon: '⚡', description: '模型转换、量化、边缘部署' },
-    { id: 'dataset', name: '数据处理', icon: '📦', description: '数据集处理、标注、预处理流程' },
-    { id: 'prompt', name: 'Prompt工程', icon: '💬', description: 'Prompt 模板、RAG 方案、API 封装' },
-  ],
-  software: [
-    { id: 'architecture', name: '架构设计', icon: '🏗️', description: '系统架构、设计模式、技术选型' },
-    { id: 'api', name: 'API设计', icon: '🔗', description: 'REST/GraphQL、接口规范、认证方案' },
-    { id: 'database', name: '数据库', icon: '💾', description: '数据库设计、SQL 优化、迁移方案' },
-    { id: 'deployment', name: '部署配置', icon: '🚀', description: 'Docker、CI/CD、环境配置' },
-    { id: 'debug', name: '调试经验', icon: '🐛', description: 'Bug 修复经验、性能优化' },
-  ],
-  linux: [
-    { id: 'system', name: '系统配置', icon: '🔧', description: '系统安装、内核编译、启动配置' },
-    { id: 'driver', name: '驱动开发', icon: '💽', description: '内核模块、设备树、驱动移植' },
-    { id: 'network', name: '网络配置', icon: '🌐', description: '网络调优、防火墙、VPN 配置' },
-    { id: 'cross-compile', name: '交叉编译', icon: '🔨', description: '工具链配置、SDK 构建、镜像打包' },
-    { id: 'debug', name: '调试经验', icon: '🐛', description: '系统故障排查、性能分析' },
-  ],
-  mobile: [
-    { id: 'ui', name: 'UI组件', icon: '🎨', description: 'UI 框架、组件库、动画方案' },
-    { id: 'native', name: '原生能力', icon: '📱', description: '相机、蓝牙、传感器、推送通知' },
-    { id: 'network', name: '网络通信', icon: '📡', description: 'HTTP、WebSocket、数据同步' },
-    { id: 'performance', name: '性能优化', icon: '⚡', description: '启动优化、内存管理、包体积' },
-    { id: 'debug', name: '调试经验', icon: '🐛', description: 'Crash 分析、兼容性问题' },
-  ],
-  remote: [
-    { id: 'connection', name: '连接配置', icon: '🔗', description: 'SSH、VNC、远程桌面配置' },
-    { id: 'deployment', name: '部署脚本', icon: '📜', description: '自动化部署、环境搭建脚本' },
-    { id: 'monitoring', name: '监控运维', icon: '📈', description: '系统监控、告警、日志管理' },
-    { id: 'debug', name: '排障经验', icon: '🐛', description: '网络故障、服务异常排查' },
-  ],
+  mcu: FIXED_KNOWLEDGE_CATEGORIES,
+  ai: FIXED_KNOWLEDGE_CATEGORIES,
+  software: FIXED_KNOWLEDGE_CATEGORIES,
+  linux: FIXED_KNOWLEDGE_CATEGORIES,
+  mobile: FIXED_KNOWLEDGE_CATEGORIES,
+  remote: FIXED_KNOWLEDGE_CATEGORIES,
 }
 
 export const PROJECT_TYPES: ProjectTypeConfig[] = [
@@ -406,6 +399,10 @@ export interface ElectronAPI {
   readMarkdown: (filePath: string) => Promise<MarkdownParseResult | null>
   // 项目导入
   selectFolder: () => Promise<string | null>
+  /** 选择配置文件并返回内容，用于「从文件加载配置」 */
+  selectConfigFile: () => Promise<{ path: string; content: string } | null>
+  /** 解析配置文件内容为 SilProjectConfig */
+  parseProjectConfig: (content: string) => Promise<SilProjectConfig | null>
   analyzeProject: (projectPath: string) => Promise<ProjectAnalysis | null>
   readProjectFile: (filePath: string) => Promise<string | null>
   writeProjectFile: (filePath: string, content: string) => Promise<boolean>
@@ -420,6 +417,7 @@ export interface ElectronAPI {
     Promise<Record<string, { valid: boolean, newPath?: string, reason?: string }>>
   // Git 操作
   gitClone: (url: string, targetPath: string, branch?: string) => Promise<GitOperationResult>
+  onGitCloneProgress: (callback: (data: { percent: number; speedText: string }) => void) => () => void
   gitPull: (repoPath: string) => Promise<GitOperationResult>
   gitStatus: (repoPath: string) => Promise<GitStatusResult>
   openInFinder: (path: string) => Promise<boolean>
@@ -427,8 +425,12 @@ export interface ElectronAPI {
   openInCursor: (path: string) => Promise<boolean>
   openExternal: (url: string) => Promise<boolean>
   // 项目目录管理
-  moveToTypeDir: (sourcePath: string, projectType: string, projectName: string) => Promise<MoveProjectResult>
+  moveToTypeDir: (sourcePath: string, projectType: string, projectName?: string) => Promise<MoveProjectResult>
+  renameFolderToMatchName: (projectPath: string, projectDisplayName: string) => Promise<{ success: boolean; newPath: string; error?: string; skipped?: boolean }>
   getTypeDir: (projectType: string) => Promise<string>
+  getCustomProjectTypes: () => Promise<CustomProjectType[]>
+  addCustomProjectType: (payload: { id: string; name: string; icon?: string; color?: string }) =>
+    Promise<{ success: boolean; type?: CustomProjectType; error?: string }>
   deleteProjectDir: (projectPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
   // AI 分析
   analyzeGitHubRepo: (url: string, apiKey: string) => Promise<GitHubRepoAnalysis | null>
@@ -441,8 +443,14 @@ export interface ElectronAPI {
   syncFromProject: (projectPath: string, apiKey?: string, projectType?: string) => Promise<SilSyncResult>
   syncToProject: (projectPath: string, data: Partial<SilProjectData>) => Promise<boolean>
   checkPendingSync: (projectPath: string, projectType?: string) => Promise<PendingSyncResult>
+  checkRemovedDocs: (projectPath: string, payload: { knowledge: Array<{ id: string; category: string; projectType: string }>; notes: string[] }) => Promise<{ removedKnowledgeIds: string[]; removedNoteIds: string[] }>
   reverseSyncToProjects: () => Promise<{ success: boolean; synced: number; skipped: number; errors: string[] }>
   clearKnowledgeBase: () => Promise<{ success: boolean; deleted: number; error?: string }>
+  /** 清空中央笔记/知识库并删除所有项目内的 .nexus */
+  resetAllSyncData: () => Promise<{ success: boolean; centralDeleted: number; removedNexusDirs: number; errors?: string[] }>
+  removeNexusDir: (projectPath: string) => Promise<{ success: boolean; removed?: boolean; error?: string }>
+  /** 获取知识库分类（固定 4 类，各项目类型返回相同） */
+  getKnowledgeCategoriesForType: (projectType: string) => Promise<{ id: string; name: string; icon: string }[]>
   // 同步进度监听
   onSyncProgress: (callback: (progress: SyncProgress) => void) => () => void
 }
@@ -477,13 +485,14 @@ export interface SilProjectConfig {
   tags?: string[]                 // 标签
   githubUrl?: string              // 关联的 GitHub 仓库
   createdAt?: string
+  projectType?: string            // 项目类型，写入 project.yaml，同步时决定 knowledge 目录与笔记面板筛选
 }
 
 // .nexus 目录中的文档
 export interface SilDocument {
   id: string
   filename: string                // 文件名
-  type: 'debug' | 'note' | 'snippet' | 'config'
+  type: 'debug' | 'note' | 'snippet' | 'config' | 'other'
   title: string
   content: string                 // Markdown 内容
   tags: string[]
@@ -502,8 +511,8 @@ export interface SilProjectData {
 // 同步结果
 export interface SilSyncResult {
   success: boolean
-  imported: number                // 导入的文档数
-  updated: number                 // 更新的文档数
+  imported: number
+  updated: number
   errors: string[]
 }
 
@@ -515,7 +524,7 @@ export interface LocalProject {
   description?: string
   summary?: string                // AI 生成的详细介绍
   features?: string[]             // 主要功能特性
-  projectType: ProjectType        // 项目类型 (新增)
+  projectType: ProjectType | string  // 项目类型（含自定义类型 id）
   // MCU 特有
   chip?: string
   framework?: string
@@ -559,12 +568,23 @@ export interface LocalProjectAnalysis {
   name: string                    // 项目名称
   description: string             // 简短描述
   summary: string                 // 详细介绍
-  projectType?: ProjectType       // 项目类型
-  chip: string                    // 芯片型号
-  framework: string               // 开发框架
-  peripherals: string[]           // 使用的外设
-  tags: string[]                  // 标签
-  features: string[]              // 主要功能特性
+  projectType?: ProjectType | string  // 项目类型（已知或 AI 建议的新类型 id）
+  suggestedNewTypeName?: string   // 当为新类型时的中文显示名建议
+  confidenceByType?: Record<string, number>  // 对六类归属的推荐占比（0-1）
+  chip: string
+  framework: string
+  peripherals: string[]
+  tags: string[]
+  features: string[]
+}
+
+// 自定义项目类型（用户创建）
+export interface CustomProjectType {
+  id: string
+  name: string
+  icon: string
+  color: string
+  templateRef?: string
 }
 
 // 移动项目目录结果
@@ -931,16 +951,16 @@ export interface Note {
   peripheralIds?: string[]
   projectId?: string
   
-  // 项目关联（双向索引）
-  projectName?: string            // 关联的项目名称
-  projectPath?: string            // 关联的项目路径
-  sourceProject?: string          // 兼容旧字段
-  
+  /** 所属项目类型，笔记面板按此分类 */
+  projectType?: ProjectType | string
+  projectName?: string
+  projectPath?: string
+  sourceProject?: string
+
   tags: string[]
   createdAt: string
   updatedAt: string
-  
-  isNew?: boolean                 // 是否为新同步的文档（未读）
+  isNew?: boolean
 }
 
 // ============================================================

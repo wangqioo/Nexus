@@ -7,7 +7,8 @@ import { promisify } from 'util'
 
 const execAsync = promisify(exec)
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+// 开发模式：未打包且未显式设为 production 时加载 Vite 开发服务器
+const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production'
 
 // 数据存储目录
 const DATA_DIR = path.join(os.homedir(), '.nexus')
@@ -17,6 +18,9 @@ const DATA_DIR = path.join(os.homedir(), '.nexus')
 // ============================================================
 
 const TEMPLATE_CONFIG_FILE = path.join(DATA_DIR, 'templates.json')
+/** 模板即唯一真相：~/.nexus/templates/<ref>/templates.json，首次运行由种子生成 */
+const TEMPLATES_DIR = path.join(DATA_DIR, 'templates')
+const TEMPLATE_REF_IDS = ['mcu', 'software', 'ai', 'remote', 'linux', 'mobile'] as const
 
 // 默认模板配置（与 types/index.ts 中的 DEFAULT_TEMPLATE_CONFIG 保持一致）
 const DEFAULT_TEMPLATE_CONFIG = {
@@ -170,12 +174,171 @@ const DEFAULT_TEMPLATE_CONFIG = {
 4. 解释关键参数的含义
 5. 说明使用时需要修改的地方`,
     },
+    other: {
+      id: 'other',
+      name: '其他',
+      icon: 'FolderOutlined',
+      description: '未归入调试/笔记/代码片段/配置时的经验文档',
+      fileExtension: '.md',
+      frontmatterFields: [
+        { name: 'title', label: '标题', type: 'text', required: true, placeholder: '标题' },
+        { name: 'tags', label: '标签', type: 'tags', required: false, placeholder: '添加标签' },
+        { name: 'created', label: '创建时间', type: 'date', required: true },
+      ],
+      contentTemplate: `## 说明
+<!-- 简要说明 -->
+
+## 内容
+<!-- 详细内容 -->
+`,
+      aiPrompt: `请帮我记录这条经验。要求：标题清晰，内容条理清楚，必要时包含示例或参考。`,
+    },
   },
   settings: {
     autoAddTimestamp: true,
     defaultTags: [],
     aiAnalysisEnabled: true,
   },
+  // 知识库固定 4 类（笔记仅保留在笔记库）
+  knowledgeCategories: [
+    { id: 'debug', name: '调试经验', icon: '🐛', silDir: 'debug' },
+    { id: 'snippet', name: '代码片段', icon: '📝', silDir: 'snippets' },
+    { id: 'config', name: '配置模板', icon: '⚙️', silDir: 'configs' },
+    { id: 'other', name: '其他', icon: '📁', silDir: 'other' },
+  ] as { id: string; name: string; icon: string; silDir: string }[],
+}
+
+type KnowledgeCategory = 'mcu' | 'software' | 'ai' | 'remote' | 'linux' | 'mobile'
+
+/** 内嵌模板目录：开发时为 electron/templates-default，打包后可为 extraResources */
+function getBundledTemplatesBase(): string {
+  const fromDir = path.join(__dirname, 'templates-default')
+  if (fs.existsSync(fromDir)) return fromDir
+  const fromResources = path.join(process.resourcesPath || __dirname, 'templates-default')
+  return fromResources
+}
+
+/** 仅用于种子与回退：从 electron/templates-default/<ref>/templates.json 读取，无则返回默认结构 */
+function getBundledTemplateConfig(category: KnowledgeCategory): typeof DEFAULT_TEMPLATE_CONFIG {
+  const baseDir = getBundledTemplatesBase()
+  const filePath = path.join(baseDir, category, 'templates.json')
+  if (fs.existsSync(filePath)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      const merged = {
+        ...DEFAULT_TEMPLATE_CONFIG,
+        ...raw,
+        templates: { ...(DEFAULT_TEMPLATE_CONFIG.templates as object), ...(raw.templates || {}) },
+        settings: { ...DEFAULT_TEMPLATE_CONFIG.settings, ...(raw.settings || {}) },
+        knowledgeCategories: Array.isArray(raw.knowledgeCategories) && raw.knowledgeCategories.length > 0
+          ? raw.knowledgeCategories
+          : (DEFAULT_TEMPLATE_CONFIG as any).knowledgeCategories,
+      }
+      return merged as typeof DEFAULT_TEMPLATE_CONFIG
+    } catch (e) {
+      console.error('[Nexus] getBundledTemplateConfig 解析失败:', category, e)
+    }
+  }
+  return JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_CONFIG)) as typeof DEFAULT_TEMPLATE_CONFIG
+}
+
+/** 确保 ~/.nexus/templates 存在并已种子（缺则从 getBundledTemplateConfig 写入） */
+function ensureTemplatesDir() {
+  try {
+    if (!fs.existsSync(TEMPLATES_DIR)) {
+      fs.mkdirSync(TEMPLATES_DIR, { recursive: true })
+    }
+    for (const ref of TEMPLATE_REF_IDS) {
+      const dir = path.join(TEMPLATES_DIR, ref)
+      const file = path.join(dir, 'templates.json')
+      if (!fs.existsSync(file)) {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+        const config = getBundledTemplateConfig(ref)
+        fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf-8')
+        console.log(`[Nexus] 已种子模板: ${ref}`)
+      }
+    }
+  } catch (e) {
+    console.error('[Nexus] ensureTemplatesDir:', e)
+  }
+}
+
+/** 模板即唯一真相：优先读 ~/.nexus/templates/<ref>/templates.json，无则用内置种子 */
+function getTemplateConfigForCategory(category: KnowledgeCategory): typeof DEFAULT_TEMPLATE_CONFIG {
+  ensureTemplatesDir()
+  const file = path.join(TEMPLATES_DIR, category, 'templates.json')
+  if (fs.existsSync(file)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, 'utf-8'))
+      const merged = {
+        ...DEFAULT_TEMPLATE_CONFIG,
+        ...raw,
+        templates: { ...(DEFAULT_TEMPLATE_CONFIG.templates as object), ...(raw.templates || {}) },
+        settings: { ...DEFAULT_TEMPLATE_CONFIG.settings, ...(raw.settings || {}) },
+        knowledgeCategories: Array.isArray(raw.knowledgeCategories) && raw.knowledgeCategories.length > 0
+          ? raw.knowledgeCategories
+          : (DEFAULT_TEMPLATE_CONFIG as any).knowledgeCategories,
+      }
+      return merged as typeof DEFAULT_TEMPLATE_CONFIG
+    } catch (e) {
+      console.error('[Nexus] 读取模板失败，回退内置:', category, e)
+    }
+  }
+  return getBundledTemplateConfig(category)
+}
+
+/** 从模板得到 .nexus 子目录列表（notes + 各笔记标签对应目录），用于创建目录与同步 */
+function getSilSubdirs(templateConfig: typeof DEFAULT_TEMPLATE_CONFIG): string[] {
+  const cats = (templateConfig as any).knowledgeCategories as { silDir: string }[] | undefined
+  const dirs = cats ? [...new Set(cats.map(c => c.silDir))] : []
+  if (!dirs.includes('notes')) dirs.unshift('notes')
+  return dirs
+}
+
+// 项目类型定义表（id + dir；templateRef 仅作兼容保留，.nexus 已统一使用一份模板）
+const PROJECT_TYPE_DEFS: { id: string; templateRef: KnowledgeCategory; dir: string }[] = [
+  { id: 'mcu', templateRef: 'mcu', dir: '/Users/wq/Workshop/MCU' },
+  { id: 'ai', templateRef: 'ai', dir: '/Users/wq/Workshop/AI' },
+  { id: 'software', templateRef: 'software', dir: '/Users/wq/Workshop/Software' },
+  { id: 'linux', templateRef: 'linux', dir: '/Users/wq/Workshop/Linux' },
+  { id: 'mobile', templateRef: 'mobile', dir: '/Users/wq/Workshop/Mobile' },
+  { id: 'remote', templateRef: 'remote', dir: '/Users/wq/Workshop/Remote' },
+]
+
+// 自定义项目类型（用户通过「无法归类」流程创建）
+const CUSTOM_PROJECT_TYPES_FILE = path.join(DATA_DIR, 'custom-project-types.json')
+interface CustomProjectType { id: string; name: string; icon: string; color: string; templateRef?: string }
+function loadCustomProjectTypes(): CustomProjectType[] {
+  try {
+    if (fs.existsSync(CUSTOM_PROJECT_TYPES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CUSTOM_PROJECT_TYPES_FILE, 'utf-8'))
+      return Array.isArray(data.types) ? data.types : []
+    }
+  } catch (e) { console.error('[Nexus] loadCustomProjectTypes:', e) }
+  return []
+}
+function saveCustomProjectTypes(types: CustomProjectType[]): boolean {
+  try {
+    fs.writeFileSync(CUSTOM_PROJECT_TYPES_FILE, JSON.stringify({ types }, null, 2), 'utf-8')
+    return true
+  } catch (e) { return false }
+}
+
+/** 合并内置 + 自定义类型（自定义统一放到 Workshop/Other） */
+function getMergedProjectTypeDefs(): { id: string; templateRef: KnowledgeCategory; dir: string }[] {
+  const otherDir = path.join(os.homedir(), 'Workshop', 'Other')
+  const custom = loadCustomProjectTypes().map(t => ({
+    id: t.id,
+    templateRef: (t.templateRef as KnowledgeCategory) || 'software',
+    dir: otherDir,
+  }))
+  return [...PROJECT_TYPE_DEFS, ...custom]
+}
+
+/** 从项目类型查模板集，用于选模板与 AI 提示 */
+function getTemplateRef(projectType: string): KnowledgeCategory {
+  const def = getMergedProjectTypeDefs().find(t => t.id === projectType)
+  return def ? def.templateRef : 'software'
 }
 
 // 读取模板配置
@@ -629,7 +792,15 @@ function createWindow() {
   })
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
+    let port = 5173
+    try {
+      const portPath = path.join(__dirname, '..', '.vite-dev-port')
+      if (fs.existsSync(portPath)) {
+        const p = parseInt(fs.readFileSync(portPath, 'utf-8').trim(), 10)
+        if (p > 0) port = p
+      }
+    } catch (_) {}
+    mainWindow.loadURL(`http://localhost:${port}`)
     mainWindow.webContents.openDevTools()  // 调试
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
@@ -757,6 +928,52 @@ ipcMain.handle('dialog:selectFolder', async () => {
     return result.filePaths[0]
   }
   return null
+})
+
+/** 选择配置文件（project.yaml 等）并返回内容，用于「从文件加载配置」 */
+ipcMain.handle('dialog:selectConfigFile', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    title: '选择配置文件 (project.yaml 或 .json)',
+    filters: [
+      { name: 'YAML / JSON', extensions: ['yaml', 'yml', 'json'] },
+      { name: 'All', extensions: ['*'] }
+    ]
+  })
+  if (!result.canceled && result.filePaths.length > 0) {
+    try {
+      const content = fs.readFileSync(result.filePaths[0], 'utf-8')
+      return { path: result.filePaths[0], content }
+    } catch (e) {
+      console.error('Read config file error:', e)
+      return null
+    }
+  }
+  return null
+})
+
+/** 解析配置文件内容为 SilProjectConfig，用于「从文件加载配置」 */
+ipcMain.handle('config:parseProjectConfig', (_, content: string) => {
+  try {
+    const raw = content.trim().startsWith('{')
+      ? JSON.parse(content)
+      : parseSimpleYaml(content)
+    const projectType = raw.projectType || raw.knowledgeCategory || 'mcu'
+    return {
+      id: raw.id,
+      name: raw.name || '',
+      description: raw.description || '',
+      chip: raw.chip || '',
+      framework: raw.framework || '',
+      peripherals: Array.isArray(raw.peripherals) ? raw.peripherals : [],
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      githubUrl: raw.githubUrl || '',
+      projectType,
+    }
+  } catch (e) {
+    console.error('Parse project config error:', e)
+    return null
+  }
 })
 
 ipcMain.handle('project:analyze', async (_, projectPath: string) => {
@@ -993,43 +1210,81 @@ ipcMain.handle('project:createDir', async (_, dirPath: string) => {
 // Git 操作 IPC
 // ============================================================
 
-ipcMain.handle('git:clone', async (_, url: string, targetPath: string, branch?: string) => {
+// 克隆时使用的环境：保证打包后也能找到 git（macOS 常见路径）
+function getCloneEnv () {
+  const env = { ...process.env }
+  if (process.platform === 'darwin') {
+    const extra = '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin'
+    env.PATH = env.PATH ? `${extra}:${env.PATH}` : extra
+  }
+  return env
+}
+
+ipcMain.handle('git:clone', async (event, url: string, targetPath: string, branch?: string) => {
+  const sender = event.sender
+  const sendProgress = (data: { percent: number; speedText: string }) => {
+    try { sender.send('git:clone:progress', data) } catch (_) { /* window closed */ }
+  }
+
   try {
-    // 确保目标目录存在
     const parentDir = path.dirname(targetPath)
     if (!fs.existsSync(parentDir)) {
       fs.mkdirSync(parentDir, { recursive: true })
     }
-    
-    // 如果目标目录已存在，检查是否为空
+
     if (fs.existsSync(targetPath)) {
       const files = fs.readdirSync(targetPath)
       if (files.length > 0) {
         return { success: false, message: '目标目录不为空', error: 'Directory not empty' }
       }
     }
-    
-    // 构建 git clone 命令
-    let command = `git clone --depth 1`
-    if (branch) {
-      command += ` -b ${branch}`
-    }
-    command += ` "${url}" "${targetPath}"`
-    
-    console.log('Executing:', command)
-    const { stdout, stderr } = await execAsync(command, { timeout: 300000 }) // 5分钟超时
-    
-    return { 
-      success: true, 
-      message: `克隆成功: ${path.basename(targetPath)}`,
-    }
+
+    const args = ['clone', '--progress', '--depth', '1']
+    if (branch) args.push('-b', branch)
+    args.push(url, targetPath)
+
+    let stderrText = ''
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn('git', args, {
+        stdio: ['ignore', 'ignore', 'pipe'],
+        env: getCloneEnv(),
+      })
+      let lastPercent = 0
+      let lastSpeed = ''
+
+      proc.stderr?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString()
+        stderrText += text
+        const lines = text.replace(/\r/g, '\n').split('\n')
+        for (const line of lines) {
+          const pct = line.match(/(\d+)%/)
+          if (pct) lastPercent = Math.min(100, parseInt(pct[1], 10))
+          const spd = line.match(/([\d.]+)\s*(MiB|KiB)\/s/i)
+          if (spd) lastSpeed = `${spd[1]} ${spd[2]}/s`
+        }
+        if (lastPercent > 0 || lastSpeed) sendProgress({ percent: lastPercent, speedText: lastSpeed })
+      })
+
+      proc.on('error', (err: NodeJS.ErrnoException) => {
+        reject(new Error(err.code === 'ENOENT' ? '未找到 Git，请先安装 Git' : err.message))
+      })
+      proc.on('close', (code, signal) => {
+        if (code === 0) {
+          sendProgress({ percent: 100, speedText: lastSpeed })
+          resolve()
+        } else {
+          const firstLine = stderrText.trim().split('\n')[0]?.trim() || (signal ? `killed: ${signal}` : `exit ${code}`)
+          reject(new Error(firstLine))
+        }
+      })
+    })
+
+    return { success: true, message: `克隆成功: ${path.basename(targetPath)}` }
   } catch (error: any) {
     console.error('Git clone error:', error)
-    return { 
-      success: false, 
-      message: '克隆失败', 
-      error: error.message || String(error) 
-    }
+    const errMsg = error?.message || String(error)
+    const short = errMsg.length > 200 ? errMsg.slice(0, 197) + '...' : errMsg
+    return { success: false, message: '克隆失败', error: short }
   }
 })
 
@@ -1160,13 +1415,21 @@ ipcMain.handle('shell:openInCursor', async (_, targetPath: string) => {
       return false
     }
     
-    // 使用 Cursor 打开项目
     if (process.platform === 'darwin') {
+      // macOS: 用 open -a 打开 Cursor 应用，不依赖 PATH 里的 cursor 命令（打包后 PATH 可能没有）
+      await execAsync(`open -a "Cursor" "${targetPath}"`)
+      return true
+    }
+    
+    if (process.platform === 'win32') {
+      // Windows: 尝试 cursor 命令（用户安装 Cursor 时可选加入 PATH）
       await execAsync(`cursor "${targetPath}"`)
       return true
     }
     
-    return false
+    // Linux
+    await execAsync(`cursor "${targetPath}"`)
+    return true
   } catch {
     return false
   }
@@ -1181,66 +1444,114 @@ ipcMain.handle('shell:openExternal', async (_, url: string) => {
   }
 })
 
-// 项目类型到目录的映射
-const PROJECT_TYPE_DIRS: Record<string, string> = {
-  'mcu': '/Users/wq/Workshop/MCU',
-  'ai': '/Users/wq/Workshop/AI',
-  'software': '/Users/wq/Workshop/Software',
-  'linux': '/Users/wq/Workshop/Linux',
-  'mobile': '/Users/wq/Workshop/Mobile',
-  'remote': '/Users/wq/Workshop/Remote',
+// 由类型表派生：项目类型 → 工作目录（含自定义类型）
+function getProjectTypeDirs(): Record<string, string> {
+  return Object.fromEntries(getMergedProjectTypeDefs().map(t => [t.id, t.dir]))
 }
 
-// 移动项目到对应类型目录
-ipcMain.handle('project:moveToTypeDir', async (_, sourcePath: string, projectType: string, projectName: string) => {
+// 将 Nexus 项目名转为合法文件夹名（去掉非法字符）
+function sanitizeFolderName(name: string): string {
+  return name
+    .replace(/[\/\\:*?"<>|]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')  // 多个连字符合并为一个
+    .replace(/^-|-$/g, '') // 去掉首尾的 -
+    .trim() || 'project'
+}
+
+// 移动项目到对应类型目录，以 Nexus 项目管理中的名称为文件夹名
+ipcMain.handle('project:moveToTypeDir', async (_, sourcePath: string, projectType: string, projectName?: string) => {
   try {
-    const typeDir = PROJECT_TYPE_DIRS[projectType]
+    const typeDir = getProjectTypeDirs()[projectType]
     if (!typeDir) {
       return { success: false, error: `未知的项目类型: ${projectType}`, newPath: sourcePath }
     }
     
-    // 确保目标目录存在
     if (!fs.existsSync(typeDir)) {
       fs.mkdirSync(typeDir, { recursive: true })
     }
     
-    const targetPath = path.join(typeDir, projectName)
+    // 传入 projectName 时用于克隆等场景（如 typeDir/repoName）；否则保持源路径文件夹名
+    const folderName = (projectName && projectName.trim())
+      ? sanitizeFolderName(projectName.trim())
+      : path.basename(sourcePath)
+    let targetPath = path.join(typeDir, folderName)
     
-    // 如果源路径和目标路径相同，不需要移动
-    if (sourcePath === targetPath) {
+    if (path.resolve(sourcePath) === path.resolve(targetPath)) {
       return { success: true, newPath: targetPath, moved: false }
     }
     
-    // 检查目标是否已存在
     if (fs.existsSync(targetPath)) {
-      // 目标已存在，尝试添加后缀
       let suffix = 1
-      let newTargetPath = `${targetPath}-${suffix}`
-      while (fs.existsSync(newTargetPath) && suffix < 100) {
+      let newFolderName = `${folderName}-${suffix}`
+      targetPath = path.join(typeDir, newFolderName)
+      while (fs.existsSync(targetPath) && suffix < 100) {
         suffix++
-        newTargetPath = `${targetPath}-${suffix}`
+        newFolderName = `${folderName}-${suffix}`
+        targetPath = path.join(typeDir, newFolderName)
       }
       if (suffix >= 100) {
         return { success: false, error: '目标目录已存在太多同名项目', newPath: sourcePath }
       }
-      // 移动到带后缀的目录
-      await execAsync(`mv "${sourcePath}" "${newTargetPath}"`)
-      return { success: true, newPath: newTargetPath, moved: true }
     }
     
-    // 移动目录
     await execAsync(`mv "${sourcePath}" "${targetPath}"`)
     return { success: true, newPath: targetPath, moved: true }
-    
   } catch (error: any) {
     console.error('移动项目目录失败:', error)
     return { success: false, error: error.message, newPath: sourcePath }
   }
 })
 
+// 将 Workshop 中的项目文件夹重命名为 Nexus 中的项目名（同步文件夹名）
+ipcMain.handle('project:renameFolderToMatchName', async (_, projectPath: string, projectDisplayName: string) => {
+  try {
+    if (!fs.existsSync(projectPath)) {
+      return { success: false, error: '路径不存在', newPath: projectPath }
+    }
+    const parentDir = path.dirname(projectPath)
+    const currentFolderName = path.basename(projectPath)
+    const targetFolderName = sanitizeFolderName(projectDisplayName)
+    if (currentFolderName === targetFolderName) {
+      return { success: true, newPath: projectPath, skipped: true }
+    }
+    let targetPath = path.join(parentDir, targetFolderName)
+    if (fs.existsSync(targetPath) && path.resolve(targetPath) !== path.resolve(projectPath)) {
+      let suffix = 1
+      while (fs.existsSync(path.join(parentDir, `${targetFolderName}-${suffix}`))) {
+        suffix++
+        if (suffix >= 100) {
+          return { success: false, error: '目标名称已存在且无法生成新名称', newPath: projectPath }
+        }
+      }
+      targetPath = path.join(parentDir, `${targetFolderName}-${suffix}`)
+    }
+    await execAsync(`mv "${projectPath}" "${targetPath}"`)
+    return { success: true, newPath: targetPath, skipped: false }
+  } catch (error: any) {
+    console.error('重命名项目文件夹失败:', error)
+    return { success: false, error: error.message, newPath: projectPath }
+  }
+})
+
 // 获取项目类型对应的目录
 ipcMain.handle('project:getTypeDir', async (_, projectType: string) => {
-  return PROJECT_TYPE_DIRS[projectType] || '/Users/wq/Workshop/Other'
+  return getProjectTypeDirs()[projectType] || path.join(os.homedir(), 'Workshop', 'Other')
+})
+
+ipcMain.handle('project:getCustomTypes', () => loadCustomProjectTypes())
+ipcMain.handle('project:addCustomType', (_, payload: { id: string; name: string; icon?: string; color?: string }) => {
+  const list = loadCustomProjectTypes()
+  const id = (payload.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'custom'
+  if (list.some(t => t.id === id)) return { success: false, error: '该类型 ID 已存在' }
+  list.push({
+    id,
+    name: (payload.name || id).trim(),
+    icon: payload.icon ?? '📁',
+    color: payload.color ?? '#8c8c8c',
+    templateRef: 'software',
+  })
+  return saveCustomProjectTypes(list) ? { success: true, type: list[list.length - 1] } : { success: false, error: '保存失败' }
 })
 
 // 删除项目目录（移动到废纸篓）
@@ -1277,7 +1588,7 @@ ipcMain.handle('project:deleteDir', async (_, projectPath: string) => {
 // ============================================================
 
 const SIL_DIR = '.nexus'
-const SIL_SUBDIRS = ['debug', 'notes', 'snippets', 'configs']
+const SIL_SUBDIRS = ['notes', 'debug', 'snippets', 'configs', 'other']
 
 // 根据模板配置生成 Cursor Rules 内容
 function generateCursorRulesFromTemplate(projectConfig: any, templateConfig: typeof DEFAULT_TEMPLATE_CONFIG): string {
@@ -1342,11 +1653,22 @@ ${generateTemplateGuide(templates.snippet, 'snippets')}
 
 ${generateTemplateGuide(templates.note, 'notes')}
 
+（\`notes/\` 同步到笔记库，按项目类型在笔记面板分类。）
+
 ---
 
 ${generateTemplateGuide(templates.config, 'configs')}
 
 ---
+
+${(templates as any).other ? generateTemplateGuide((templates as any).other, 'other') : '### 其他 (.nexus/other/)\n未归入以上类型时放入此处，同步到知识库「其他」类。\n'}
+
+---
+
+## 知识库与笔记库
+
+- **知识库**仅允许 4 类：调试经验(debug)、代码片段(snippets)、配置模板(configs)、其他(other)。
+- **笔记库**：\`.nexus/notes/\` 的文档同步到笔记库，仅在笔记面板展示，按项目类型分类。
 
 ## 同步到知识库
 
@@ -1360,30 +1682,35 @@ ${generateTemplateGuide(templates.config, 'configs')}
 `
 }
 
-// 初始化 .nexus 项目目录
+// 初始化 .nexus 项目目录（统一使用一份模板配置，不按项目类型区分）
+// 一键加载配置时强制使用固定 4 类知识分类，保证各项目 .nexus 配置一致
 ipcMain.handle('sil:init', async (_, projectPath: string, config: any) => {
   try {
     const silPath = path.join(projectPath, SIL_DIR)
     
-    // 加载全局模板配置
+    const projectType = config.projectType ?? config.knowledgeCategory ?? 'mcu'
     const templateConfig = loadTemplateConfig()
+    // 强制 .nexus 使用固定 4 类，与模板解耦，便于一键加载配置同步
+    const nexusConfig = {
+      ...templateConfig,
+      knowledgeCategories: FIXED_KNOWLEDGE_CATEGORIES_FOR_NEXUS,
+    }
+    console.log(`[Nexus] 初始化 .nexus projectType: ${projectType}, 知识分类: 4 类统一（一份模板）`)
     
-    // 创建 .nexus 目录结构
     if (!fs.existsSync(silPath)) {
       fs.mkdirSync(silPath, { recursive: true })
     }
-    
-    // 创建子目录
-    for (const subdir of SIL_SUBDIRS) {
+    const subdirs = getSilSubdirs(nexusConfig)
+    for (const subdir of subdirs) {
       const subdirPath = path.join(silPath, subdir)
       if (!fs.existsSync(subdirPath)) {
         fs.mkdirSync(subdirPath, { recursive: true })
       }
     }
     
-    // 写入 project.yaml 配置文件（包含项目 ID 用于路径变化检测）
     const projectConfig = {
-      id: config.id || `proj_${Date.now()}`,  // 唯一标识，用于路径变化时匹配
+      id: config.id || `proj_${Date.now()}`,
+      projectType,
       name: config.name || path.basename(projectPath),
       description: config.description || '',
       chip: config.chip || '',
@@ -1406,29 +1733,27 @@ ipcMain.handle('sil:init', async (_, projectPath: string, config: any) => {
     
     fs.writeFileSync(path.join(silPath, 'project.yaml'), yamlContent, 'utf-8')
     
-    // 把模板配置也写入项目（让项目独立，方便版本控制）
+    // 写入项目的 .nexus 配置（固定 4 类）
     fs.writeFileSync(
       path.join(silPath, 'templates.json'),
-      JSON.stringify(templateConfig, null, 2),
+      JSON.stringify(nexusConfig, null, 2),
       'utf-8'
     )
     
-    // 创建 README（使用模板配置中的信息）
-    const { templates } = templateConfig
+    const { templates } = nexusConfig
     const readmeContent = `# ${projectConfig.name}
 
 > 此目录由 Nexus 管理，存储项目开发经验和笔记。
 
 ## 目录结构
 
-- \`debug/\` - ${templates.debug.description}
-- \`notes/\` - ${templates.note.description}
-- \`snippets/\` - ${templates.snippet.description}
-- \`configs/\` - ${templates.config.description}
+- \`notes/\` - 笔记（同步到笔记库，仅在笔记面板展示）
+- \`debug/\` - 调试经验（知识库）
+- \`snippets/\` - 代码片段（知识库）
+- \`configs/\` - 配置模板（知识库）
+- \`other/\` - 其他（知识库）
 
-## 文档格式
-
-所有文档使用 Markdown 格式，带 YAML frontmatter。详细模板配置见 \`templates.json\`。
+知识库 4 类 + 笔记库，详见 \`templates.json\`。
 
 ### 调试经验示例
 
@@ -1454,10 +1779,10 @@ ${templates.snippet.contentTemplate}
       fs.mkdirSync(cursorRulesDir, { recursive: true })
     }
     
-    const cursorRuleContent = generateCursorRulesFromTemplate(projectConfig, templateConfig)
+    const cursorRuleContent = generateCursorRulesFromTemplate(projectConfig, nexusConfig)
     fs.writeFileSync(path.join(cursorRulesDir, 'nexus.mdc'), cursorRuleContent, 'utf-8')
     
-    // 记录项目使用的模板版本
+    // 记录项目使用的模板版本（统一一份模板）
     recordProjectTemplateUsage(projectPath, projectConfig.name, templateConfig.version)
     
     return true
@@ -1500,10 +1825,11 @@ ipcMain.handle('sil:scan', async (_, projectPath: string) => {
         const content = fs.readFileSync(filePath, 'utf-8')
         const parsed = parseMarkdownWithFrontmatter(content)
         
+        const typeMap: Record<string, string> = { notes: 'note', debug: 'debug', note: 'note', snippets: 'snippet', configs: 'config', other: 'other' }
         documents.push({
           id: `${subdir}/${file.replace('.md', '')}`,
           filename: file,
-          type: subdir.replace(/s$/, '') as any, // debug, note, snippet, config
+          type: (typeMap[subdir] || 'other') as any,
           title: parsed.frontmatter.title || file.replace('.md', ''),
           content: parsed.content,
           tags: parsed.frontmatter.tags || [],
@@ -1525,8 +1851,39 @@ ipcMain.handle('sil:scan', async (_, projectPath: string) => {
   }
 })
 
-// 用 AI 分析文档内容
-async function analyzeDocWithAI(content: string, type: string, filename: string, apiKey: string): Promise<any> {
+// 用 AI 分析文档内容；按 projectCategory（mcu/software/ai）使用对应知识库的文档选项进行归类
+async function analyzeDocWithAI(
+  content: string,
+  type: string,
+  filename: string,
+  apiKey: string,
+  projectCategory: 'mcu' | 'software' | 'ai' | 'remote' = 'mcu'
+): Promise<any> {
+  const categoryHints = {
+    mcu: {
+      debug: 'platform 填芯片/开发板（如 ESP32-S3），framework 填开发框架（如 ESP-IDF 5.x）',
+      snippets: 'language 填 c/cpp/python 等，category 填 driver/algorithm/utility/config/template/other 之一',
+      configs: 'platform 填如 ESP-IDF 5.x，configType 可为 build/env/device/network/other',
+    },
+    software: {
+      debug: 'platform 填运行环境（如 Node, Vue, React）',
+      snippets: 'language 填 javascript/typescript/python 等，category 填 frontend/backend/utility/config/script/other 之一',
+      configs: 'platform 填如 Vite, Docker，configType 可为 build/env/deploy/network/other',
+    },
+    ai: {
+      debug: 'platform 填框架或平台（如 PyTorch, TensorFlow）',
+      snippets: 'language 填 python 等，category 填 ml/pipeline/utility/config/script/other 之一',
+      configs: 'platform 填如 Conda, Docker，configType 可为 build/env/deploy/network/other',
+    },
+    remote: {
+      debug: 'platform 填远程/运维环境（如 SSH, VNC, 服务器）',
+      snippets: 'language 填 shell/python 等，category 填 connection/deployment/monitoring/utility/config/script/other 之一',
+      configs: 'platform 填如 SSH, systemd, Docker，configType 可为 build/env/deploy/network/other',
+    },
+  }
+  const hints = categoryHints[projectCategory]
+  const hintLine = type === 'debug' ? hints.debug : type === 'snippets' ? hints.snippets : type === 'configs' ? hints.configs : ''
+
   const prompts: Record<string, string> = {
     debug: `分析这篇调试经验文档，提取关键信息，返回 JSON 格式：
 {
@@ -1537,9 +1894,10 @@ async function analyzeDocWithAI(content: string, type: string, filename: string,
   "solutionCode": "关键代码（如有）",
   "severity": "严重程度（critical/major/minor/trivial）",
   "tags": ["标签1", "标签2"],
-  "platform": "涉及的芯片平台（如 ESP32-S3）",
-  "framework": "开发框架（如 ESP-IDF 5.x）"
-}`,
+  "platform": "涉及平台（见下方说明）",
+  "framework": "开发框架或运行环境（见下方说明）"
+}
+说明（请按本项目知识库类别填写）：${hintLine}`,
     notes: `分析这篇笔记文档，提取关键信息，返回 JSON 格式：
 {
   "title": "笔记标题（中文，简洁明了）",
@@ -1548,28 +1906,25 @@ async function analyzeDocWithAI(content: string, type: string, filename: string,
   "tags": ["标签1", "标签2", "标签3"]
 }
 
-笔记分类说明（请根据内容特征选择最匹配的一个）：
-- learning: 学习笔记 — 技术学习、文档阅读、课程记录、新知识探索、教程笔记
-- summary: 开发总结 — 项目复盘、阶段总结、功能开发记录、版本发布总结、工作汇报
-- design: 方案设计 — 架构设计、技术选型、方案对比、系统设计、功能规划
-- issue: 问题记录 — 踩坑记录、升级迁移问题、兼容性问题、已知限制、待解决问题
-- reference: 参考手册 — 速查表、API参考、配置说明、命令速查、接口文档`,
+笔记分类（任选其一）：learning / summary / design / issue / reference`,
     snippets: `分析这篇代码片段文档，提取关键信息，返回 JSON 格式：
 {
   "name": "代码片段名称（中文）",
   "description": "功能描述（30字以内）",
-  "language": "编程语言（c/cpp/python/rust）",
+  "language": "编程语言（见下方说明）",
   "code": "核心代码内容",
   "tags": ["标签1", "标签2"]
-}`,
+}
+说明（请按本项目知识库类别填写）：${hintLine}`,
     configs: `分析这篇配置文档，提取关键信息，返回 JSON 格式：
 {
   "name": "配置名称（中文）",
   "description": "配置说明",
-  "platform": "适用平台",
+  "platform": "适用平台（见下方说明）",
   "framework": "开发框架",
   "tags": ["标签1", "标签2"]
-}`
+}
+说明（请按本项目知识库类别填写）：${hintLine}`,
   }
 
   try {
@@ -1615,8 +1970,8 @@ ipcMain.handle('sil:checkPending', async (_, projectPath: string, projectType?: 
     }
     
     const projectName = path.basename(projectPath)
-    // 优先使用前端传入的项目类型，否则根据路径推断
-    const resolvedType = projectType || detectProjectType(projectPath)
+    // 与 syncFrom 一致：优先 .nexus/project.yaml 的 knowledgeCategory，再前端类型，再路径推断
+    const resolvedType = getProjectKnowledgeCategory(projectPath) || projectType || detectProjectType(projectPath)
     let pendingCount = 0
     const details: Record<string, number> = {}
     
@@ -1628,34 +1983,25 @@ ipcMain.handle('sil:checkPending', async (_, projectPath: string, projectType?: 
       const files = fs.readdirSync(sourceDir).filter(f => f.endsWith('.md'))
       let subdirPending = 0
       
+      const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
+      const targetDir = subdir === 'notes'
+        ? path.join(DATA_DIR, 'notes')
+        : path.join(DATA_DIR, 'knowledge', resolvedType)
+      // 与 syncFrom 一致：笔记 notes/ProjectName-file.json，知识库扁平 knowledge/type/ProjectName-silDir-baseName.json
       for (const file of files) {
         const sourcePath = path.join(sourceDir, file)
         const sourceStats = fs.statSync(sourcePath)
         const sourceModTime = sourceStats.mtime.getTime()
-        
-        // 确定目标文件路径 - 使用解析后的项目类型
-        const category = subdir === 'notes' ? null : subdir.replace(/s$/, '')
-        const targetDir = category 
-          ? path.join(DATA_DIR, 'knowledge', resolvedType, category)
-          : path.join(DATA_DIR, 'notes')
-        
-        const jsonFilename = file.replace('.md', '.json')
-        // 使用安全的项目名作为前缀，避免不同项目的文件冲突（与 syncFrom 保持一致）
-        const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
-        const targetFilename = `${safeProjectName}-${jsonFilename}`
+        const baseName = file.replace('.md', '')
+        const targetFilename = subdir === 'notes'
+          ? `${safeProjectName}-${file.replace('.md', '.json')}`
+          : `${safeProjectName}-${subdir}-${baseName}.json`
         const targetPath = path.join(targetDir, targetFilename)
-        
-        // 检查目标文件是否存在，以及修改时间
         if (!fs.existsSync(targetPath)) {
-          // 目标不存在，需要同步
           subdirPending++
         } else {
           const targetStats = fs.statSync(targetPath)
-          const targetModTime = targetStats.mtime.getTime()
-          // 如果源文件比目标文件新，需要同步
-          if (sourceModTime > targetModTime) {
-            subdirPending++
-          }
+          if (sourceStats.mtime.getTime() > targetStats.mtime.getTime()) subdirPending++
         }
       }
       
@@ -1676,6 +2022,44 @@ ipcMain.handle('sil:checkPending', async (_, projectPath: string, projectType?: 
   }
 })
 
+// 检测项目中「已在 Nexus 同步、但项目内源 .md 已删除」的条目（供刷新后展示红色删除）
+ipcMain.handle('sil:checkRemovedDocs', async (
+  _,
+  projectPath: string,
+  payload: { knowledge: Array<{ id: string; category: string; projectType: string }>; notes: string[] }
+) => {
+  const silPath = path.join(projectPath, SIL_DIR)
+  if (!fs.existsSync(silPath)) {
+    return { removedKnowledgeIds: [] as string[], removedNoteIds: [] as string[] }
+  }
+  const projectName = path.basename(projectPath)
+  const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const prefix = safeProjectName + '-'
+  const removedKnowledgeIds: string[] = []
+  const removedNoteIds: string[] = []
+  // 笔记 id = ProjectName-baseName → .nexus/notes/baseName.md
+  const toNoteSourceMd = (id: string) => {
+    const base = id.startsWith(prefix) ? id.slice(prefix.length) : id
+    return base + '.md'
+  }
+  // 知识库 id = ProjectName-silDir-baseName（扁平）→ .nexus/silDir/baseName.md
+  const catToSilDir: Record<string, string> = { debug: 'debug', snippet: 'snippets', config: 'configs', other: 'other' }
+  for (const id of payload.notes) {
+    const sourceMd = toNoteSourceMd(id)
+    const sourcePath = path.join(silPath, 'notes', sourceMd)
+    if (!fs.existsSync(sourcePath)) removedNoteIds.push(id)
+  }
+  for (const { id, category } of payload.knowledge) {
+    const silDir = catToSilDir[category] || 'other'
+    const rest = id.startsWith(prefix) ? id.slice(prefix.length) : id
+    const baseName = rest.startsWith(silDir + '-') ? rest.slice(silDir.length + 1) : rest
+    const sourceMd = baseName + '.md'
+    const sourcePath = path.join(silPath, silDir, sourceMd)
+    if (!fs.existsSync(sourcePath)) removedKnowledgeIds.push(id)
+  }
+  return { removedKnowledgeIds, removedNoteIds }
+})
+
 // 发送同步进度到渲染进程
 function sendSyncProgress(step: string, current: number, total: number, file?: string) {
   const win = BrowserWindow.getAllWindows()[0]
@@ -1687,7 +2071,7 @@ function sendSyncProgress(step: string, current: number, total: number, file?: s
 // 根据项目路径推断项目类型
 function detectProjectType(projectPath: string): string {
   const normalizedPath = projectPath.toLowerCase()
-  for (const [type, dir] of Object.entries(PROJECT_TYPE_DIRS)) {
+  for (const [type, dir] of Object.entries(getProjectTypeDirs())) {
     if (normalizedPath.includes(dir.toLowerCase())) {
       return type
     }
@@ -1696,7 +2080,52 @@ function detectProjectType(projectPath: string): string {
   return 'mcu'
 }
 
+function getProjectTypeIds(): string[] {
+  return getMergedProjectTypeDefs().map(t => t.id)
+}
+
+/** 从 .nexus/project.yaml 读取项目类型（优先 projectType，兼容旧字段 knowledgeCategory） */
+function getProjectType(projectPath: string): string | null {
+  const silPath = path.join(projectPath, SIL_DIR)
+  const configPath = path.join(silPath, 'project.yaml')
+  if (!fs.existsSync(configPath)) return null
+  try {
+    const config = parseSimpleYaml(fs.readFileSync(configPath, 'utf-8'))
+    const id = config.projectType || config.knowledgeCategory
+    if (typeof id === 'string' && getProjectTypeIds().includes(id)) return id
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** @deprecated 改用 getProjectType；保留别名便于过渡 */
+function getProjectKnowledgeCategory(projectPath: string): string | null {
+  return getProjectType(projectPath)
+}
+
+/** 知识库固定 4 类（笔记仅保留在笔记面板），含 silDir 用于 .nexus 与一键加载配置 */
+const FIXED_KNOWLEDGE_CATS = [
+  { id: 'debug', name: '调试经验', icon: '🐛' },
+  { id: 'snippet', name: '代码片段', icon: '📝' },
+  { id: 'config', name: '配置模板', icon: '⚙️' },
+  { id: 'other', name: '其他', icon: '📁' },
+]
+const FIXED_KNOWLEDGE_CATEGORIES_FOR_NEXUS = [
+  { id: 'debug', name: '调试经验', icon: '🐛', silDir: 'debug' },
+  { id: 'snippet', name: '代码片段', icon: '📝', silDir: 'snippets' },
+  { id: 'config', name: '配置模板', icon: '⚙️', silDir: 'configs' },
+  { id: 'other', name: '其他', icon: '📁', silDir: 'other' },
+]
+function getKnowledgeCategoriesForProjectType(_projectType: string): { id: string; name: string; icon: string }[] {
+  return FIXED_KNOWLEDGE_CATS
+}
+
 // 清理知识库（保留目录结构，删除所有 JSON 文件）
+ipcMain.handle('knowledge:getCategoriesForType', (_, projectType: string) =>
+  getKnowledgeCategoriesForProjectType(projectType)
+)
+
 ipcMain.handle('knowledge:clear', async () => {
   try {
     const knowledgeDir = path.join(DATA_DIR, 'knowledge')
@@ -1740,11 +2169,94 @@ ipcMain.handle('knowledge:clear', async () => {
   }
 })
 
+const LOCAL_PROJECTS_FILE = 'local-projects.json'
+
+/** 删除单个项目内的 .nexus 目录 */
+ipcMain.handle('sil:removeNexusDir', async (_, projectPath: string) => {
+  try {
+    const nexusPath = path.join(projectPath, '.nexus')
+    if (!fs.existsSync(nexusPath)) return { success: true, removed: false }
+    fs.rmSync(nexusPath, { recursive: true, force: true })
+    return { success: true, removed: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+})
+
+/** 清空所有笔记/知识库文档并删除所有项目内的 .nexus，便于重新配置 */
+ipcMain.handle('sil:resetAllSyncData', async () => {
+  const errors: string[] = []
+  let centralDeleted = 0
+
+  try {
+    // 1. 清空中央知识库 + 笔记
+    const knowledgeDir = path.join(DATA_DIR, 'knowledge')
+    if (fs.existsSync(knowledgeDir)) {
+      const clearDir = (dir: string) => {
+        const items = fs.readdirSync(dir)
+        for (const item of items) {
+          const itemPath = path.join(dir, item)
+          if (fs.statSync(itemPath).isDirectory()) clearDir(itemPath)
+          else if (item.endsWith('.json') || item.endsWith('.md')) {
+            fs.unlinkSync(itemPath)
+            centralDeleted++
+          }
+        }
+      }
+      clearDir(knowledgeDir)
+    }
+    const notesDir = path.join(DATA_DIR, 'notes')
+    if (fs.existsSync(notesDir)) {
+      const files = fs.readdirSync(notesDir).filter(f => f.endsWith('.json') || f.endsWith('.md'))
+      for (const file of files) {
+        fs.unlinkSync(path.join(notesDir, file))
+        centralDeleted++
+      }
+    }
+
+    // 2. 删除每个项目内的 .nexus 目录
+    const localProjectsPath = path.join(DATA_DIR, LOCAL_PROJECTS_FILE)
+    let removedDirs = 0
+    if (fs.existsSync(localProjectsPath)) {
+      const data = JSON.parse(fs.readFileSync(localProjectsPath, 'utf-8'))
+      const projects: Array<{ path: string }> = data.projects || []
+      for (const p of projects) {
+        const projectPath = p.path
+        if (!projectPath) continue
+        const nexusPath = path.join(projectPath, '.nexus')
+        if (fs.existsSync(nexusPath)) {
+          try {
+            fs.rmSync(nexusPath, { recursive: true, force: true })
+            removedDirs++
+          } catch (e: any) {
+            errors.push(`${path.basename(projectPath)}: ${e.message}`)
+          }
+        }
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      centralDeleted,
+      removedNexusDirs: removedDirs,
+      errors: errors.length ? errors : undefined,
+    }
+  } catch (error: any) {
+    console.error('resetAllSyncData failed:', error)
+    return {
+      success: false,
+      centralDeleted,
+      removedNexusDirs: 0,
+      errors: [error.message],
+    }
+  }
+})
+
 // 反向同步：将全局知识库内容同步回对应项目的 .nexus 目录（已弃用）
 ipcMain.handle('sil:reverseSync', async () => {
   try {
     // 读取本地项目列表
-    const localProjectsPath = path.join(DATA_DIR, 'local-projects.json')
+    const localProjectsPath = path.join(DATA_DIR, LOCAL_PROJECTS_FILE)
     let projectMap: Map<string, string> = new Map() // projectName -> projectPath
     
     if (fs.existsSync(localProjectsPath)) {
@@ -1762,11 +2274,12 @@ ipcMain.handle('sil:reverseSync', async () => {
     let skipped = 0
     const errors: string[] = []
     
-    // 分类映射: knowledge category -> .nexus subdir
+    // 分类映射: knowledge category -> .nexus subdir（扁平 4 类 + 旧分类兼容）
     const categoryToSilDir: Record<string, string> = {
       'debug': 'debug',
       'snippet': 'snippets',
       'config': 'configs',
+      'other': 'other',
       'platform': 'notes',
       'architecture': 'notes',
       'driver': 'notes',
@@ -1785,76 +2298,74 @@ ipcMain.handle('sil:reverseSync', async () => {
     
     for (const type of types) {
       const typeDir = path.join(knowledgeDir, type)
+      const processFile = (filePath: string, file: string, category: string) => {
+        try {
+          const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+          let sourceProject = content.sourceProject || content.projectPath || content.metadata?.sourceProject
+          if (!sourceProject) {
+            skipped++
+            return
+          }
+          if (sourceProject.startsWith('/')) {
+            sourceProject = path.basename(sourceProject)
+          }
+          let projectPath = projectMap.get(sourceProject)
+          if (!projectPath) {
+            for (const [name, pPath] of projectMap.entries()) {
+              if (name.includes(sourceProject) || sourceProject.includes(name) || pPath.includes(sourceProject)) {
+                projectPath = pPath
+                break
+              }
+            }
+          }
+          if (!projectPath) {
+            skipped++
+            return
+          }
+          const silDir = categoryToSilDir[category] || 'other'
+          const targetDir = path.join(projectPath, SIL_DIR, silDir)
+          if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true })
+          }
+          const baseName = file.replace('.json', '')
+          const mdFilename = baseName.includes('-') ? baseName.split('-').slice(2).join('-') + '.md' : baseName + '.md'
+          const targetPath = path.join(targetDir, mdFilename)
+          if (fs.existsSync(targetPath)) {
+            skipped++
+            return
+          }
+          const mdContent = jsonToMarkdown(content, category)
+          fs.writeFileSync(targetPath, mdContent, 'utf-8')
+          synced++
+        } catch (e) {
+          errors.push(`${file}: ${(e as Error).message}`)
+        }
+      }
+
+      // 扁平：knowledge/type/*.json，category 从 content.category 取
+      const flatFiles = fs.readdirSync(typeDir).filter(f => {
+        const full = path.join(typeDir, f)
+        return f.endsWith('.json') && fs.existsSync(full) && fs.statSync(full).isFile()
+      })
+      for (const file of flatFiles) {
+        const filePath = path.join(typeDir, file)
+        try {
+          const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+          const category = content.category || 'other'
+          processFile(filePath, file, category)
+        } catch {
+          skipped++
+        }
+      }
+      // 旧结构：knowledge/type/category/*.json
       const categories = fs.readdirSync(typeDir).filter(f =>
         fs.statSync(path.join(typeDir, f)).isDirectory()
       )
-      
       for (const category of categories) {
         const categoryDir = path.join(typeDir, category)
         const files = fs.readdirSync(categoryDir).filter(f => f.endsWith('.json'))
-        
         for (const file of files) {
-          try {
-            const filePath = path.join(categoryDir, file)
-            const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-            
-            // 获取源项目
-            let sourceProject = content.sourceProject || content.metadata?.sourceProject
-            if (!sourceProject) {
-              skipped++
-              continue
-            }
-            
-            // 如果是完整路径，提取项目名
-            if (sourceProject.startsWith('/')) {
-              sourceProject = path.basename(sourceProject)
-            }
-            
-            // 查找对应的项目路径
-            let projectPath = projectMap.get(sourceProject)
-            if (!projectPath) {
-              // 尝试模糊匹配
-              for (const [name, pPath] of projectMap.entries()) {
-                if (name.includes(sourceProject) || sourceProject.includes(name) ||
-                    pPath.includes(sourceProject)) {
-                  projectPath = pPath
-                  break
-                }
-              }
-            }
-            
-            if (!projectPath) {
-              skipped++
-              continue
-            }
-            
-            // 确定目标子目录
-            const silDir = categoryToSilDir[category] || 'notes'
-            const targetDir = path.join(projectPath, SIL_DIR, silDir)
-            
-            // 确保目录存在
-            if (!fs.existsSync(targetDir)) {
-              fs.mkdirSync(targetDir, { recursive: true })
-            }
-            
-            // 生成 Markdown 文件名
-            const mdFilename = file.replace('.json', '.md')
-            const targetPath = path.join(targetDir, mdFilename)
-            
-            // 如果文件已存在，跳过
-            if (fs.existsSync(targetPath)) {
-              skipped++
-              continue
-            }
-            
-            // 将 JSON 转换为 Markdown
-            const mdContent = jsonToMarkdown(content, category)
-            fs.writeFileSync(targetPath, mdContent, 'utf-8')
-            synced++
-            
-          } catch (e) {
-            errors.push(`${file}: ${(e as Error).message}`)
-          }
+          processFile(path.join(categoryDir, file), file, category)
         }
       }
     }
@@ -1951,7 +2462,7 @@ function jsonToMarkdown(entry: any, category: string): string {
 }
 
 // 从项目同步到管理器（带 AI 分析）
-// v5: 写入 knowledge/{projectType}/{category}/ 知识库格式
+// 分类仅按项目类型：写入 knowledge/{projectType}/（扁平），笔记标签仅作条目元数据用于展示
 ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, projectType?: string) => {
   try {
     const silPath = path.join(projectPath, SIL_DIR)
@@ -1961,9 +2472,10 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
     
     sendSyncProgress('准备同步', 0, 1)
     
-    // 优先使用前端传入的项目类型，否则根据路径推断
-    const resolvedType = projectType || detectProjectType(projectPath)
-    console.log(`[Sync] 项目路径: ${projectPath}, 类型: ${resolvedType}${projectType ? ' (前端指定)' : ' (路径推断)'}`)
+    const fromProjectYaml = getProjectType(projectPath)
+    const resolvedType = fromProjectYaml || projectType || detectProjectType(projectPath)
+    const templateConfig = loadTemplateConfig()
+    console.log(`[Sync] 项目路径: ${projectPath}, 类型: ${resolvedType}${fromProjectYaml ? ' (project.yaml)' : projectType ? ' (前端指定)' : ' (路径推断)'}（一份模板）`)
     
     // 尝试从配置文件读取 API Key
     let actualApiKey = apiKey
@@ -1983,13 +2495,26 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
     const projectName = path.basename(projectPath)
     const now = new Date().toISOString()
     
-    // 映射: .nexus 子目录 -> 知识库分类
-    const syncTypes = [
-      { silDir: 'debug',    category: 'debug', name: '调试经验' },
-      { silDir: 'notes',    category: null, name: '笔记' },
-      { silDir: 'snippets', category: 'snippet', name: '代码片段' },
-      { silDir: 'configs',  category: 'config', name: '配置模板' },
-    ]
+    // 知识库固定 4 类（笔记仅保留在笔记库）；.nexus 子目录与 category 映射
+    const SIL_TO_CATEGORY: Record<string, string> = {
+      debug: 'debug',
+      snippets: 'snippet',
+      configs: 'config',
+      other: 'other',
+    }
+    const syncTypes: { silDir: string; name: string; category: string | null }[] = [{ silDir: 'notes', name: '笔记', category: null }]
+    const allowedKnowledgeDirs = ['debug', 'snippets', 'configs', 'other']
+    try {
+      const entries = fs.readdirSync(silPath, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'notes' || entry.name === 'templates') continue
+        const dirPath = path.join(silPath, entry.name)
+        const count = fs.readdirSync(dirPath).filter(f => f.endsWith('.md')).length
+        if (count === 0) continue
+        const category = SIL_TO_CATEGORY[entry.name] ?? 'other'
+        syncTypes.push({ silDir: entry.name, name: entry.name, category })
+      }
+    } catch {}
     
     // 先统计总文件数
     let totalFiles = 0
@@ -2000,18 +2525,21 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
       }
     }
     
+    const knowledgeTargetDir = path.join(DATA_DIR, 'knowledge', resolvedType)
+    if (!fs.existsSync(knowledgeTargetDir)) {
+      fs.mkdirSync(knowledgeTargetDir, { recursive: true })
+    }
+    
     let processedFiles = 0
     
-    for (const { silDir, category, name } of syncTypes) {
+    for (const { silDir, name, category } of syncTypes) {
       const sourceDir = path.join(silPath, silDir)
-      
-      // 确定目标目录 - 使用解析后的项目类型
-      const targetDir = category 
-        ? path.join(DATA_DIR, 'knowledge', resolvedType, category)
-        : path.join(DATA_DIR, 'notes')
+      const targetDir = silDir === 'notes'
+        ? path.join(DATA_DIR, 'notes')
+        : knowledgeTargetDir
       
       if (!fs.existsSync(sourceDir)) continue
-      if (!fs.existsSync(targetDir)) {
+      if (silDir === 'notes' && !fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true })
       }
       
@@ -2025,25 +2553,22 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
           const sourcePath = path.join(sourceDir, file)
           const fileContent = fs.readFileSync(sourcePath, 'utf-8')
           
-          // 解析 YAML frontmatter
           const parsed = parseMarkdownWithFrontmatter(fileContent)
           const meta = parsed.frontmatter
           const content = parsed.content
           
-          // 用 AI 分析提取关键信息
           let aiData: any = null
           if (actualApiKey) {
             sendSyncProgress(`AI 分析${name}`, processedFiles, totalFiles, file)
-            aiData = await analyzeDocWithAI(fileContent, silDir, file, actualApiKey)
+            aiData = await analyzeDocWithAI(fileContent, silDir, file, actualApiKey, undefined)
           }
           
-          // 使用安全项目名作为 ID 前缀（与文件名一致，确保前后端 ID 匹配）
           const safeProjectNameForId = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
-          const baseId = `${safeProjectNameForId}-${file.replace('.md', '')}`
+          const baseName = file.replace('.md', '')
+          const baseId = silDir === 'notes' ? `${safeProjectNameForId}-${baseName}` : `${safeProjectNameForId}-${silDir}-${baseName}`
           let jsonData: any
           
-          if (!category) {
-            // Notes: 保持独立格式
+          if (silDir === 'notes') {
             jsonData = {
               id: meta.id || baseId,
               title: aiData?.title || meta.title || file.replace('.md', '').replace(/-/g, ' '),
@@ -2052,30 +2577,24 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
               tags: [...new Set([...(aiData?.tags || []), ...(meta.tags || []), projectName])],
               createdAt: meta.createdAt || now,
               updatedAt: now,
-              // 项目关联（双向索引）
+              projectType: resolvedType,
               projectName: projectName,
               projectPath: projectPath,
-              sourceProject: projectPath  // 兼容旧字段
+              sourceProject: projectPath
             }
           } else {
-            // 知识库: 统一 KnowledgeEntry 格式
+            const knowledgeCategory = category || 'other'
             const title = aiData?.title || aiData?.name || meta.title || meta.name || file.replace('.md', '').replace(/-/g, ' ')
             const tags = [...new Set([...(aiData?.tags || []), ...(meta.tags || []), projectName])]
-            
             const metadata: Record<string, any> = { sourceProject: projectPath }
-            
-            if (category === 'debug') {
+            if (knowledgeCategory === 'debug') {
               metadata.symptom = aiData?.symptom || meta.symptom || content.substring(0, 200)
               metadata.errorLog = meta.errorLog || ''
               metadata.rootCause = aiData?.rootCause || meta.rootCause || ''
               metadata.solution = aiData?.solution || meta.solution || content
               metadata.solutionCode = aiData?.solutionCode || meta.code || ''
-              metadata.environment = {
-                platformId: aiData?.platform || meta.platform || '',
-                peripheralIds: meta.peripherals || [],
-                frameworkVersion: aiData?.framework || meta.framework || ''
-              }
-            } else if (category === 'snippet') {
+              metadata.environment = { platformId: aiData?.platform || meta.platform || '', peripheralIds: meta.peripherals || [], frameworkVersion: aiData?.framework || meta.framework || '' }
+            } else if (knowledgeCategory === 'snippet') {
               const codeMatch = content.match(/```[\w]*\n([\s\S]*?)```/)
               metadata.language = aiData?.language || meta.language || 'c'
               metadata.snippetCategory = meta.category || 'utility'
@@ -2083,33 +2602,30 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
               metadata.code = aiData?.code || meta.code || codeMatch?.[1] || content
               metadata.platformIds = meta.platforms || []
               metadata.peripheralIds = meta.peripherals || []
-            } else if (category === 'config') {
+            } else if (knowledgeCategory === 'config') {
               metadata.description = aiData?.description || meta.description || ''
               metadata.platformId = aiData?.platform || meta.platform || ''
               metadata.files = []
             }
-            
             jsonData = {
               id: meta.id || baseId,
               title,
               content: content,
-              projectType: resolvedType,  // 使用解析后的项目类型
-              category,
+              projectType: resolvedType,
+              category: knowledgeCategory,  // 固定 4 类之一
               tags,
               severity: aiData?.severity || meta.severity,
-              // 项目关联（双向索引）
               projectName: projectName,
               projectPath: projectPath,
-              sourceProject: projectPath,  // 兼容旧字段
+              sourceProject: projectPath,
               metadata,
               createdAt: meta.createdAt || now,
               updatedAt: now,
             }
           }
           
-          // 保存为 JSON - 加项目前缀避免同名冲突
           const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
-          const jsonFilename = `${safeProjectName}-${file.replace('.md', '.json')}`
+          const jsonFilename = silDir === 'notes' ? `${safeProjectName}-${file.replace('.md', '.json')}` : `${safeProjectName}-${silDir}-${baseName}.json`
           const targetPath = path.join(targetDir, jsonFilename)
           
           const isUpdate = fs.existsSync(targetPath)
@@ -2498,13 +3014,12 @@ ipcMain.handle('project:scanDirectory', async (_, dirPath: string) => {
   }
 })
 
-// AI 生成项目的知识库和笔记（写入 .nexus 目录）
+// AI 生成项目的知识库和笔记（写入 .nexus 目录）；按项目知识库类别使用对应模板（与一键同步一致）
 ipcMain.handle('ai:generateProjectDocs', async (_, projectPath: string, apiKey: string) => {
   try {
     const projectName = path.basename(projectPath)
     const silPath = path.join(projectPath, SIL_DIR)
     
-    // 加载模板配置
     const templateConfig = loadTemplateConfig()
     const { templates } = templateConfig
     
@@ -2808,7 +3323,7 @@ ipcMain.handle('ai:analyzeLocalProject', async (_, projectPath: string, apiKey: 
     }
     
     // 构建 prompt
-    const prompt = `分析这个 MCU/嵌入式项目并返回 JSON 格式的信息:
+    const prompt = `分析这个项目并返回 JSON 格式的信息:
 
 ${projectInfo}
 
@@ -2823,33 +3338,31 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
 
 请仔细分析以上项目信息，返回以下 JSON 格式（只返回 JSON，不要其他内容）:
 {
-  "name": "项目名称（中文，简短易懂，如 智能手表、语音助手、LED矩阵时钟）",
+  "name": "项目名称（中文，简短易懂）",
   "description": "一句话中文描述（不超过30字）",
-  "summary": "详细介绍（2-4段中文，约200-400字，包含：项目功能、主要特性、技术亮点、应用场景）",
-  "projectType": "项目类型（只能是以下之一：mcu/ai/software/linux/mobile/remote）",
-  "chip": "芯片型号（如 ESP32-S3、STM32F407、SF32LB52X，如无则留空）",
-  "framework": "开发框架（如 ESP-IDF、RT-Thread、Arduino、PyTorch、React）",
+  "summary": "详细介绍（2-4段中文，约200-400字）",
+  "projectType": "项目类型：若能明确归入以下之一则填 mcu/ai/software/linux/mobile/remote；若无法归入任何一类则填建议的新类型英文标识，如 game、iot、tool",
+  "suggestedNewTypeName": "当 projectType 为新类型时必填，为该类型的简短中文名，如 游戏、IoT、工具；否则可省略",
+  "confidenceByType": "对象，键为 mcu/ai/software/linux/mobile/remote，值为 0-1 的占比，表示归属到该类型的推荐度，总和为 1。例如 {\"mcu\":0.1,\"ai\":0,\"software\":0.6,\"linux\":0.1,\"mobile\":0.1,\"remote\":0.1}",
+  "chip": "芯片型号，如无则留空",
+  "framework": "开发框架",
   "peripherals": ["外设1", "外设2"],
-  "tags": ["标签1", "标签2", "标签3"],
-  "features": ["功能特性1", "功能特性2", "功能特性3"]
+  "tags": ["标签1", "标签2"],
+  "features": ["功能特性1", "功能特性2"]
 }
 
 项目类型说明:
-- mcu: MCU/嵌入式项目（ESP32、STM32、单片机等）
-- ai: AI/机器学习项目（模型训练、推理、LLM应用等）
-- software: 软件/Web项目（前端、后端、桌面应用等）
-- linux: Linux平台项目（驱动开发、系统移植、RK3588等）
-- mobile: 移动端项目（iOS、Android、Flutter、React Native等）
-- remote: 远程设备/DevOps（服务器部署、运维脚本等）
+- mcu: MCU/嵌入式（ESP32、STM32、单片机等）
+- ai: AI/机器学习（模型训练、推理、LLM 等）
+- software: 软件/Web（前端、后端、桌面应用等）
+- linux: Linux 平台（驱动、系统移植、RK3588 等）
+- mobile: 移动端（iOS、Android、Flutter、RN 等）
+- remote: 远程设备/DevOps（部署、运维脚本等）
 
 分析要点:
-- name: 根据项目功能取一个直观的中文名
-- chip: 从配置文件或代码中识别芯片型号
-- framework: 识别使用的开发框架
-- peripherals: 识别使用的外设（如 LCD显示屏、IMU传感器、音频编解码器、摄像头等）
-- tags: 包含芯片系列、功能领域、技术关键词
-- features: 项目的主要功能点
-- summary: 专业但易懂，介绍项目的核心价值和技术特点`
+- 若项目明显属于上述某一类，projectType 填该类，confidenceByType 中该类最高。
+- 若项目不属于任何一类（如纯游戏、IoT 产品、独立工具），projectType 填新类型英文标识（小写），suggestedNewTypeName 填中文名，confidenceByType 仍给出对六类的推荐占比供用户参考。
+- confidenceByType 必须包含全部六个键，值均为数字且总和为 1。`
 
     // 调用智谱 API
     const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
@@ -2884,6 +3397,13 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0])
+      const known = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
+      if (typeof result.confidenceByType !== 'object') {
+        result.confidenceByType = known.reduce((acc, k) => ({ ...acc, [k]: result.projectType === k ? 1 : 0 }), {} as Record<string, number>)
+      }
+      if (!result.suggestedNewTypeName && known.indexOf(result.projectType) === -1) {
+        result.suggestedNewTypeName = result.projectType || '未分类'
+      }
       return result
     }
     
@@ -3069,6 +3589,7 @@ function detectPeripherals(content: string, peripherals: string[]) {
 
 app.whenReady().then(() => {
   ensureDataDirs()
+  ensureTemplatesDir()
   migrateOldDataToKnowledge()
   createWindow()
 

@@ -241,10 +241,12 @@
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* 卡片上概括名用灰色，黑白主题下均保证可读 */
+.projectNameSummary {
+  font-weight: 500;
+  color: var(--text-tertiary);
   transition: color 0.3s;
 }
 
@@ -565,4 +567,35 @@
     max-width: 90vw;
     min-width: 200px;
   }
+}
+
+/* 后台导入时顶部固定进度条 */
+.importTopBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 10px 20px 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+.importTopBarInner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.importTopBarLabel {
+  font-size: 13px;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 8px;
+}
+.importTopBarProgress {
+  height: 6px !important;
+  margin-bottom: 0 !important;
+}
+@keyframes importPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }

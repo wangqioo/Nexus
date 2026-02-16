@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "knowledgeCategory": "mobile",
+  "templates": {
+    "debug": {
+      "id": "debug",
+      "name": "调试经验",
+      "icon": "BugOutlined",
+      "description": "Crash 分析、兼容性问题",
+      "fileExtension": ".md",
+      "frontmatterFields": [
+        { "name": "title", "label": "标题", "type": "text", "required": true, "placeholder": "问题简述" },
+        { "name": "tags", "label": "标签", "type": "tags", "required": false, "placeholder": "添加标签" },
+        { "name": "platform", "label": "平台", "type": "text", "required": false, "placeholder": "如 iOS, Android, Flutter" },
+        { "name": "created", "label": "创建时间", "type": "date", "required": true }
+      ],
+      "contentTemplate": "## 问题描述\n\n## 复现步骤\n\n## 解决方案\n\n## 经验总结\n",
+      "aiPrompt": "请帮我记录这条移动端调试经验。"
+    },
+    "snippet": { "id": "snippet", "name": "代码片段", "icon": "CodeOutlined", "description": "可复用组件与工具代码", "fileExtension": ".md", "frontmatterFields": [{ "name": "title", "label": "标题", "type": "text", "required": true }, { "name": "tags", "label": "标签", "type": "tags", "required": false }, { "name": "created", "label": "创建时间", "type": "date", "required": true }], "contentTemplate": "## 说明\n\n## 代码\n", "aiPrompt": "请保存这段代码片段。" },
+    "note": { "id": "note", "name": "开发笔记", "icon": "FileTextOutlined", "description": "学习与设计笔记", "fileExtension": ".md", "frontmatterFields": [{ "name": "title", "label": "标题", "type": "text", "required": true }, { "name": "tags", "label": "标签", "type": "tags", "required": false }, { "name": "created", "label": "创建时间", "type": "date", "required": true }], "contentTemplate": "## 背景\n\n## 核心内容\n", "aiPrompt": "请整理为开发笔记。" },
+    "config": { "id": "config", "name": "配置模板", "icon": "SettingOutlined", "description": "构建与运行配置", "fileExtension": ".md", "frontmatterFields": [{ "name": "title", "label": "标题", "type": "text", "required": true }, { "name": "tags", "label": "标签", "type": "tags", "required": false }, { "name": "created", "label": "创建时间", "type": "date", "required": true }], "contentTemplate": "## 说明\n\n## 配置内容\n", "aiPrompt": "请保存该配置。" }
+  },
+  "settings": { "autoAddTimestamp": true, "defaultTags": [], "aiAnalysisEnabled": true },
+  "knowledgeCategories": [
+    { "id": "debug", "name": "调试经验", "icon": "🐛", "silDir": "debug" },
+    { "id": "snippet", "name": "代码片段", "icon": "📝", "silDir": "snippets" },
+    { "id": "config", "name": "配置模板", "icon": "⚙️", "silDir": "configs" },
+    { "id": "other", "name": "其他", "icon": "📁", "silDir": "other" }
+  ]
+}

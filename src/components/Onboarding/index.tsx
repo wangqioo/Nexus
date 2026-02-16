@@ -77,6 +77,11 @@ export function Onboarding({ open, onFinish }: OnboardingProps) {
         <div className={styles.info}>
           <div className={styles.title}>{STEPS[current].title}</div>
           <div className={styles.subtitle}>{STEPS[current].subtitle}</div>
+          {current === 2 && (
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-secondary, #666)' }}>
+              使用前可在「设置」中配置智谱 API Key，否则仅做本地检测。
+            </div>
+          )}
         </div>
 
         {/* 按钮 */}

@@ -144,18 +144,16 @@
 ---
 
 ### 第 4 步：创建知识库条目
-存放在 `~/.nexus/knowledge/<projectType>/<category>/` 下。
+知识库使用**扁平路径**：`~/.nexus/knowledge/<projectType>/*.json`，文件名格式 `{项目名}-{分类目录}-{基础名}.json`，条目内 `category` 为固定 4 类之一（debug/snippet/config/other）。详见 `docs/extension-guide.md`。
 
-#### 知识分类体系
+#### 知识分类（固定 4 类，所有项目类型一致）
 
-| 项目类型 | 可用分类 |
-|---------|---------|
-| mcu | `platforms/`, `peripherals/`, `configs/`, `debug/`, `snippet/` |
-| ai | `model/`, `training/`, `inference/`, `dataset/`, `prompt/` |
-| software | `architecture/`, `api/`, `database/`, `deployment/`, `debug/` |
-| linux | `system/`, `driver/`, `network/`, `cross-compile/`, `debug/` |
-| mobile | `ui/`, `native/`, `network/`, `performance/`, `debug/` |
-| remote | `connection/`, `deployment/`, `monitoring/`, `debug/` |
+| 分类 id | 说明 | .nexus 子目录 |
+|---------|------|---------------|
+| debug | 调试经验 | `debug/` |
+| snippet | 代码片段 | `snippets/` |
+| config | 配置模板 | `configs/` |
+| other | 其他 | `other/` |
 
 #### 知识条目格式
 
@@ -301,3 +299,13 @@ created: 2026-02-14
 - SDK ID: `sdk-<库名>` (如 `sdk-simplefoc`)
 - 知识条目 ID: `<描述性英文>` (如 `esp32s3-yolo-detect`)
 - 避免中文、空格、特殊字符
+
+---
+
+## 应用内扩展（无需改 JSON/代码）
+
+- **导入时 AI 判断为新类型**：若项目无法归入现有类型，会弹窗让你「创建新类型」或「选择已有类型」（带 AI 推荐占比）。
+- **同步**：知识库仅允许 4 类；.nexus 使用一份统一模板，不按项目类型区分。笔记仅存于笔记库（`.nexus/notes/`），笔记面板按项目类型分类。
+- 详见 `docs/extension-guide.md`。
+
+**数据存储**：`~/.nexus/custom-project-types.json`、`~/.nexus/knowledge/<项目类型>/`、`~/.nexus/notes/`。Nexus 直接读写，无需与外部数据库同步。

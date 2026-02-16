@@ -29,12 +29,35 @@ export function Dashboard() {
   const [notesCount, setNotesCount] = useState(0)
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([])
   const [showGuide, setShowGuide] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null)
   
   // 使用全局同步状态
   const { syncing, startSync, updateProgress, updateBatchProgress, endSync, isCancelled } = useSync()
 
   useEffect(() => {
     loadData()
+  }, [])
+
+  useEffect(() => {
+    const localKey = localStorage.getItem('zhipu_api_key') || ''
+    if (localKey) {
+      setHasApiKey(true)
+      return
+    }
+    if (typeof window.electronAPI?.readFile !== 'function') {
+      setHasApiKey(false)
+      return
+    }
+    window.electronAPI.readFile('config.json').then((raw: string | null) => {
+      if (raw) {
+        try {
+          const cfg = JSON.parse(raw)
+          setHasApiKey(!!(cfg.zhipu_api_key || ''))
+          return
+        } catch (_) {}
+      }
+      setHasApiKey(false)
+    }).catch(() => setHasApiKey(false))
   }, [])
 
   const loadData = async () => {
@@ -205,7 +228,7 @@ export function Dashboard() {
     .slice(0, 6)
 
   // 获取类型配置
-  const getTypeConfig = (type: ProjectType) => PROJECT_TYPES.find(t => t.id === type)
+  const getTypeConfig = (type: string) => PROJECT_TYPES.find(t => t.id === type) || { id: type, name: type, icon: '📁', color: '#8c8c8c', description: '', specificFields: [], knowledgeCategories: [] }
 
   // 获取分类名称
   const getCategoryName = (type: ProjectType, category: string) => {
@@ -280,6 +303,24 @@ export function Dashboard() {
           <span className={styles.statLabel}>项目类型</span>
         </div>
       </div>
+
+      {/* 未配置 API Key 时提示（他人 clone 项目后需在设置中填写） */}
+      {hasApiKey === false && (
+        <Alert
+          type="warning"
+          showIcon
+          message="使用 AI 分析前请先配置智谱 API Key"
+          description={
+            <span>
+              在「设置」中填写后，即可使用项目导入时的 AI 分类、同步补全等功能。
+              <Button type="link" size="small" style={{ paddingLeft: 4 }} onClick={() => navigate('/settings')}>
+                去设置
+              </Button>
+            </span>
+          }
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* 待同步提醒 */}
       {pendingProjects.length > 0 && (
