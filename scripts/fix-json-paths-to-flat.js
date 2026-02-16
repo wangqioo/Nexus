@@ -9,13 +9,14 @@ const os = require('os')
 const DATA_DIR = path.join(os.homedir(), '.nexus')
 const PROJECTS_FILE = path.join(DATA_DIR, 'local-projects.json')
 
+const workshop = path.join(os.homedir(), 'Workshop')
 const TYPE_DIRS = {
-  mcu: '/Users/wq/Workshop/MCU',
-  ai: '/Users/wq/Workshop/AI',
-  software: '/Users/wq/Workshop/Software',
-  linux: '/Users/wq/Workshop/Linux',
-  mobile: '/Users/wq/Workshop/Mobile',
-  remote: '/Users/wq/Workshop/Remote',
+  mcu: path.join(workshop, 'MCU'),
+  ai: path.join(workshop, 'AI'),
+  software: path.join(workshop, 'Software'),
+  linux: path.join(workshop, 'Linux'),
+  mobile: path.join(workshop, 'Mobile'),
+  remote: path.join(workshop, 'Remote'),
 }
 
 function main() {

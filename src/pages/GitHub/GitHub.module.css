@@ -21,6 +21,12 @@
   transition: color 0.3s;
 }
 
+.subtitle {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .filters {
   display: flex;
   gap: 12px;

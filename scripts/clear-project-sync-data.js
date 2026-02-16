@@ -2,7 +2,7 @@
 /**
  * 清除指定项目在 Nexus 中的同步数据（笔记 + 知识库）。
  * 用法: node scripts/clear-project-sync-data.js <项目路径>
- * 例: node scripts/clear-project-sync-data.js /Users/wq/Workshop/AI/MiniCPM-o
+ * 例: node scripts/clear-project-sync-data.js /path/to/your/project
  */
 const fs = require('fs')
 const path = require('path')

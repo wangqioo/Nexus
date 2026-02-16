@@ -3,7 +3,7 @@
   "appId": "com.nexus.devhub",
   "productName": "Nexus",
   "directories": {
-    "output": "/Users/wq/Desktop",
+    "output": "release",
     "buildResources": "build"
   },
   "files": [
@@ -13,6 +13,9 @@
   "extraMetadata": {
     "main": "dist-electron/main.js"
   },
+  "extraResources": [
+    { "from": "public/icon.png", "to": "icon.png" }
+  ],
   "mac": {
     "target": [
       {

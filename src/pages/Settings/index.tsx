@@ -251,6 +251,10 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState('debug')
   const [apiKey, setApiKey] = useState('')
   const [apiKeySaving, setApiKeySaving] = useState(false)
+  const [aiProvider, setAiProvider] = useState<'zhipu' | 'openai' | 'kimi' | 'minimax' | 'custom'>('zhipu')
+  const [aiBaseUrl, setAiBaseUrl] = useState('')
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [aiModel, setAiModel] = useState('')
 
   useEffect(() => {
     loadConfig()
@@ -259,19 +263,26 @@ export function Settings() {
   useEffect(() => {
     const local = localStorage.getItem('zhipu_api_key') || ''
     setApiKey(local)
-    if (!local && typeof window.electronAPI?.readFile === 'function') {
-      window.electronAPI.readFile('config.json').then((raw: string | null) => {
-        if (raw) {
-          try {
-            const cfg = JSON.parse(raw)
-            if (cfg.zhipu_api_key) {
-              setApiKey(cfg.zhipu_api_key)
-              localStorage.setItem('zhipu_api_key', cfg.zhipu_api_key)
-            }
-          } catch (_) {}
+    if (typeof window.electronAPI?.readFile !== 'function') return
+    window.electronAPI.readFile('config.json').then((raw: string | null) => {
+      if (!raw) return
+      try {
+        const cfg = JSON.parse(raw) as Record<string, unknown>
+        if (cfg.zhipu_api_key) {
+          setApiKey(String(cfg.zhipu_api_key))
+          localStorage.setItem('zhipu_api_key', String(cfg.zhipu_api_key))
         }
-      })
-    }
+        const p = cfg.ai_provider as string
+        if (p === 'custom' || p === 'openai' || p === 'kimi' || p === 'minimax') {
+          setAiProvider(p as 'openai' | 'kimi' | 'minimax' | 'custom')
+        } else {
+          setAiProvider('zhipu')
+        }
+        setAiBaseUrl(String(cfg.ai_base_url || ''))
+        setAiApiKey(String(cfg.ai_api_key || ''))
+        setAiModel(String(cfg.ai_model || ''))
+      } catch (_) {}
+    })
   }, [])
 
   const loadConfig = async () => {
@@ -325,7 +336,7 @@ export function Settings() {
     })
   }
 
-  const handleSaveApiKey = async () => {
+  const handleSaveAi = async () => {
     setApiKeySaving(true)
     try {
       localStorage.setItem('zhipu_api_key', apiKey)
@@ -337,9 +348,23 @@ export function Settings() {
         } catch (_) {}
         existing.zhipu_api_key = apiKey || undefined
         if (apiKey === '') delete existing.zhipu_api_key
+        existing.ai_provider = aiProvider
+        if (aiProvider === 'custom') {
+          existing.ai_base_url = aiBaseUrl.trim() || undefined
+          existing.ai_api_key = aiApiKey.trim() || undefined
+          existing.ai_model = aiModel.trim() || undefined
+        } else if (aiProvider === 'openai' || aiProvider === 'kimi' || aiProvider === 'minimax') {
+          delete existing.ai_base_url
+          existing.ai_api_key = aiApiKey.trim() || undefined
+          existing.ai_model = aiModel.trim() || undefined
+        } else {
+          delete existing.ai_base_url
+          delete existing.ai_api_key
+          delete existing.ai_model
+        }
         await window.electronAPI.writeFile('config.json', JSON.stringify(existing, null, 2))
       }
-      message.success(apiKey ? '智谱 API Key 已保存' : '已清除 API Key')
+      message.success('大模型 API 已保存')
     } catch (e) {
       message.error('保存失败')
     }
@@ -390,33 +415,123 @@ export function Settings() {
         </Space>
       </div>
 
-      {/* 智谱 API Key：分享给他人后对方需在此填写自己的 Key */}
+      {/* 大模型 API：智谱（默认）或自定义接口 */}
       <Card
         title={
           <Space>
             <KeyOutlined />
-            <span>智谱 API Key</span>
+            <span>大模型 API</span>
           </Space>
         }
         className={styles.card}
         style={{ marginBottom: 20 }}
       >
         <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          用于项目 AI 分析、导入时分类与同步补全等。分享项目给他人时不会包含此 Key，对方需在
-          <a href="https://open.bigmodel.cn" target="_blank" rel="noopener noreferrer"> 智谱开放平台 </a>
-          申请自己的 Key 后在此填写。
+          用于项目 AI 分析、导入时分类与同步补全等。可选智谱（默认）或填写其他兼容 OpenAI 格式的大模型 API。
         </Paragraph>
-        <Space.Compact style={{ width: '100%', maxWidth: 480 }}>
-          <Input.Password
-            placeholder="填写后保存，不填则不使用 AI 功能"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            onPressEnter={handleSaveApiKey}
-          />
-          <Button type="primary" onClick={handleSaveApiKey} loading={apiKeySaving}>
-            保存
-          </Button>
-        </Space.Compact>
+        <Form layout="vertical" style={{ maxWidth: 560 }}>
+          <Form.Item label="提供商">
+            <Select
+              value={aiProvider}
+              onChange={(v: 'zhipu' | 'openai' | 'kimi' | 'minimax' | 'custom') => setAiProvider(v)}
+              options={[
+                { value: 'zhipu', label: '智谱（默认）' },
+                { value: 'openai', label: 'OpenAI' },
+                { value: 'kimi', label: '月之暗面 Kimi' },
+                { value: 'minimax', label: 'MiniMax' },
+                { value: 'custom', label: '其他（自定义 API）' },
+              ]}
+              style={{ width: 240 }}
+            />
+          </Form.Item>
+          {aiProvider === 'zhipu' && (
+            <Form.Item label="智谱 API Key" extra="在 智谱开放平台 申请 Key 后在此填写">
+              <Space.Compact style={{ width: '100%', maxWidth: 480 }}>
+                <Input.Password
+                  placeholder="填写后保存，不填则不使用 AI 功能"
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  onPressEnter={handleSaveAi}
+                />
+                <Button type="primary" onClick={handleSaveAi} loading={apiKeySaving}>保存</Button>
+              </Space.Compact>
+            </Form.Item>
+          )}
+          {(aiProvider === 'openai' || aiProvider === 'kimi' || aiProvider === 'minimax') && (
+            <>
+              <Form.Item
+                label="API Key"
+                extra={
+                  aiProvider === 'openai'
+                    ? '在 platform.openai.com 申请'
+                    : aiProvider === 'kimi'
+                      ? '在 月之暗面开放平台 申请'
+                      : '在 MiniMax 开放平台 申请'
+                }
+              >
+                <Space.Compact style={{ width: '100%', maxWidth: 480 }}>
+                  <Input.Password
+                    placeholder="填写后保存"
+                    value={aiApiKey}
+                    onChange={e => setAiApiKey(e.target.value)}
+                    onPressEnter={handleSaveAi}
+                  />
+                  <Button type="primary" onClick={handleSaveAi} loading={apiKeySaving}>保存</Button>
+                </Space.Compact>
+              </Form.Item>
+              <Form.Item
+                label="模型名（可选）"
+                extra={
+                  aiProvider === 'openai'
+                    ? '默认 gpt-4o-mini，可改为 gpt-4 等'
+                    : aiProvider === 'kimi'
+                      ? '默认 moonshot-v1-8k，可改为 moonshot-v1-32k、kimi-k2-turbo 等'
+                      : '默认 abab6.5s-chat'
+                }
+              >
+                <Input
+                  placeholder={
+                    aiProvider === 'openai'
+                      ? 'gpt-4o-mini'
+                      : aiProvider === 'kimi'
+                        ? 'moonshot-v1-8k'
+                        : 'abab6.5s-chat'
+                  }
+                  value={aiModel}
+                  onChange={e => setAiModel(e.target.value)}
+                />
+              </Form.Item>
+            </>
+          )}
+          {aiProvider === 'custom' && (
+            <>
+              <Form.Item label="API 基础地址" extra="例如 https://api.openai.com/v1（不要带 /chat/completions）">
+                <Input
+                  placeholder="https://api.openai.com/v1"
+                  value={aiBaseUrl}
+                  onChange={e => setAiBaseUrl(e.target.value)}
+                />
+              </Form.Item>
+              <Form.Item label="API Key">
+                <Input.Password
+                  placeholder="该服务的 API Key"
+                  value={aiApiKey}
+                  onChange={e => setAiApiKey(e.target.value)}
+                />
+              </Form.Item>
+              <Form.Item label="模型名" extra="如 gpt-4o-mini、gpt-4 等">
+                <Input
+                  placeholder="gpt-4o-mini"
+                  value={aiModel}
+                  onChange={e => setAiModel(e.target.value)}
+                />
+              </Form.Item>
+              <Form.Item>
+                <Button type="primary" onClick={handleSaveAi} loading={apiKeySaving}>保存</Button>
+              </Form.Item>
+            </>
+          )}
+        </Form>
       </Card>
 
       <Alert
@@ -436,7 +551,7 @@ export function Settings() {
         <Form layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 18 }}>
           <Form.Item 
             label="同步时用 AI 分析" 
-            extra="导入经验时让 AI 自动补全标题、标签等（需在上方配置智谱 API Key）"
+            extra="导入经验时让 AI 自动补全标题、标签等（需在上方配置大模型 API）"
           >
             <Switch
               checked={config.settings.aiAnalysisEnabled}

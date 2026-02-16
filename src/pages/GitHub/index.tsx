@@ -13,13 +13,11 @@ import {
   EditOutlined, InfoCircleOutlined
 } from '@ant-design/icons'
 import type { GitHubRepo, GitHubCategory, GitStatusResult } from '../../types'
+import { useLanguage } from '../../contexts/LanguageContext'
 import styles from './GitHub.module.css'
 
 const { Title, Text, Paragraph } = Typography
 const { TextArea } = Input
-
-// 仓库配置文件路径
-const REPOS_CONFIG_PATH = '/Users/wq/Workshop/MCU/_github/repos.json'
 
 // 图标映射
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -31,6 +29,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 }
 
 export function GitHub() {
+  const { t } = useLanguage()
   const [repos, setRepos] = useState<GitHubRepo[]>([])
   const [categories, setCategories] = useState<GitHubCategory[]>([])
   const [filteredRepos, setFilteredRepos] = useState<GitHubRepo[]>([])
@@ -39,6 +38,8 @@ export function GitHub() {
   const [repoStatus, setRepoStatus] = useState<Record<string, GitStatusResult>>({})
   const [loadingRepos, setLoadingRepos] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
+  const [reposConfigPath, setReposConfigPath] = useState<string>('')
+  const [reposBasePath, setReposBasePath] = useState<string>('')
   
   // 添加/编辑仓库模态框
   const [modalOpen, setModalOpen] = useState(false)
@@ -74,18 +75,28 @@ export function GitHub() {
   }, [])
 
   useEffect(() => {
-    loadReposConfig()
+    Promise.all([
+      window.electronAPI?.getDefaultReposConfigPath?.() ?? Promise.resolve(''),
+      window.electronAPI?.getDefaultReposBasePath?.() ?? Promise.resolve(''),
+    ]).then(([configPath, basePath]) => {
+      setReposConfigPath(configPath || '')
+      setReposBasePath(basePath || '')
+    })
   }, [])
+
+  useEffect(() => {
+    if (reposConfigPath) loadReposConfig()
+  }, [reposConfigPath])
 
   useEffect(() => {
     filterRepos()
   }, [repos, searchQuery, selectedCategory])
 
   const loadReposConfig = async () => {
+    if (!reposConfigPath) return
     setLoading(true)
     try {
-      // 读取仓库配置
-      const content = await window.electronAPI.readProjectFile(REPOS_CONFIG_PATH)
+      const content = await window.electronAPI.readProjectFile(reposConfigPath)
       if (content) {
         const config = JSON.parse(content)
         setRepos(config.repos || [])
@@ -250,7 +261,7 @@ export function GitHub() {
       const content = JSON.stringify(config, null, 2)
       
       // 直接写入原始配置文件路径
-      const success = await window.electronAPI.writeProjectFile(REPOS_CONFIG_PATH, content)
+      const success = await window.electronAPI.writeProjectFile(reposConfigPath, content)
       
       return success
     } catch (error) {
@@ -312,11 +323,10 @@ export function GitHub() {
     const url = e.target.value
     const parsed = parseGitHubUrl(url)
     
-    if (parsed && !editingRepo) {
-      // 只在添加新仓库时自动填充基本信息
+    if (parsed && !editingRepo && reposBasePath) {
       form.setFieldsValue({
         name: parsed.name,
-        localPath: `/Users/wq/Workshop/MCU/_github/tools/${parsed.name}`
+        localPath: `${reposBasePath}/tools/${parsed.name}`
       })
     }
   }
@@ -330,7 +340,7 @@ export function GitHub() {
     }
     
     if (!apiKey) {
-      message.warning('请先设置智谱 API Key')
+      message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
     
@@ -348,7 +358,8 @@ export function GitHub() {
         const parsed = parseGitHubUrl(url)
         const repoName = parsed?.name || result.name.toLowerCase().replace(/[^a-z0-9]/g, '-')
         
-        // 自动填充表单
+        // 自动填充表单（本地路径使用用户主目录下的默认开发库路径）
+        const base = reposBasePath || (await window.electronAPI?.getDefaultReposBasePath?.()) || ''
         form.setFieldsValue({
           name: result.name,
           description: result.description,
@@ -357,7 +368,7 @@ export function GitHub() {
           branch: result.branch || 'main',
           tags: result.tags?.join(', ') || '',
           starred: result.starred || false,
-          localPath: `/Users/wq/Workshop/MCU/_github/${result.category}/${repoName}`
+          localPath: base ? `${base}/${result.category}/${repoName}` : ''
         })
         
         message.success({ content: '分析完成！已生成详细介绍', key: 'analyze' })
@@ -497,7 +508,9 @@ export function GitHub() {
             </Button>
           </Space>
         </div>
-        
+        <Paragraph type="secondary" className={styles.subtitle}>
+          {t.devLibrary.subtitle}
+        </Paragraph>
         <div className={styles.filters}>
           <Input
             placeholder="搜索仓库..."
@@ -689,7 +702,7 @@ export function GitHub() {
           {!editingRepo && !apiKey && (
             <div className={styles.apiKeySection}>
               <Input.Password
-                placeholder="智谱 API Key (用于自动分析)"
+                placeholder="API Key（用于自动分析，可在设置 → 大模型 API 配置）"
                 value={apiKey}
                 onChange={e => setApiKey(e.target.value)}
                 className={styles.apiKeyInput}
@@ -787,7 +800,7 @@ export function GitHub() {
                 rules={[{ required: true, message: '请输入本地存储路径' }]}
                 extra="仓库将被克隆到此目录"
               >
-                <Input placeholder="/Users/wq/Workshop/MCU/_github/tools/xxx" />
+                <Input placeholder="本地克隆路径，如 ~/Workshop/MCU/_github/tools/xxx" />
               </Form.Item>
             </Col>
             <Col span={8}>

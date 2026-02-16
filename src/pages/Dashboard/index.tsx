@@ -9,7 +9,6 @@ import { storage } from '../../services/storage'
 import type { KnowledgeEntry, LocalProject, ProjectType } from '../../types'
 import { PROJECT_TYPES, KNOWLEDGE_CATEGORIES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
-import { Onboarding } from '../../components/Onboarding'
 import { useSync } from '../../contexts/SyncContext'
 import styles from './Dashboard.module.css'
 
@@ -28,7 +27,6 @@ export function Dashboard() {
   const [projects, setProjects] = useState<LocalProject[]>([])
   const [notesCount, setNotesCount] = useState(0)
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([])
-  const [showGuide, setShowGuide] = useState(false)
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null)
   
   // 使用全局同步状态
@@ -273,8 +271,8 @@ export function Dashboard() {
         <Button 
           type="text" 
           icon={<QuestionCircleOutlined />} 
-          onClick={() => setShowGuide(true)}
-          title="使用指南"
+          onClick={() => navigate('/guide')}
+          title="新手指南"
         />
       </div>
 
@@ -290,7 +288,7 @@ export function Dashboard() {
         </div>
         <div className={styles.statItem} onClick={() => navigate('/notes')} style={{ cursor: 'pointer' }}>
           <span className={styles.statNumber}>{notesCount}</span>
-          <span className={styles.statLabel}>笔记</span>
+          <span className={styles.statLabel}>笔记库</span>
         </div>
         <div className={styles.statItem} style={{ cursor: pendingProjects.length > 0 ? 'pointer' : undefined }} onClick={() => pendingProjects.length > 0 && navigate('/projects')}>
           <span className={styles.statNumber} style={{ color: pendingProjects.length > 0 ? '#52c41a' : undefined }}>
@@ -309,10 +307,10 @@ export function Dashboard() {
         <Alert
           type="warning"
           showIcon
-          message="使用 AI 分析前请先配置智谱 API Key"
+          message="使用 AI 分析前请先配置大模型 API"
           description={
             <span>
-              在「设置」中填写后，即可使用项目导入时的 AI 分类、同步补全等功能。
+              在「设置」→「大模型 API」中配置后，即可使用项目导入时的 AI 分类、同步补全等功能。
               <Button type="link" size="small" style={{ paddingLeft: 4 }} onClick={() => navigate('/settings')}>
                 去设置
               </Button>
@@ -372,7 +370,7 @@ export function Dashboard() {
                 opacity: stats.projects === 0 ? 0.6 : 1
               }}
             >
-              <div className={styles.typeCardIcon}>{type.icon}</div>
+              <div className={styles.typeCardIcon}>{getProjectTypeIcon(type.id, type.icon, 28)}</div>
               <div className={styles.typeCardInfo}>
                 <div className={styles.typeCardName}>{type.name}</div>
                 <div className={styles.typeCardCount}>{stats.projects}</div>
@@ -473,11 +471,6 @@ export function Dashboard() {
         </Card>
       </div>
       
-      {/* 使用指南弹窗 */}
-      <Onboarding 
-        open={showGuide} 
-        onFinish={() => setShowGuide(false)} 
-      />
     </div>
   )
 }

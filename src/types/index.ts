@@ -404,6 +404,8 @@ export interface ElectronAPI {
   /** 解析配置文件内容为 SilProjectConfig */
   parseProjectConfig: (content: string) => Promise<SilProjectConfig | null>
   analyzeProject: (projectPath: string) => Promise<ProjectAnalysis | null>
+  getDefaultReposConfigPath: () => Promise<string>
+  getDefaultReposBasePath: () => Promise<string>
   readProjectFile: (filePath: string) => Promise<string | null>
   writeProjectFile: (filePath: string, content: string) => Promise<boolean>
   deleteProjectFile: (filePath: string) => Promise<boolean>
@@ -424,6 +426,8 @@ export interface ElectronAPI {
   openInTerminal: (path: string) => Promise<boolean>
   openInCursor: (path: string) => Promise<boolean>
   openExternal: (url: string) => Promise<boolean>
+  /** 应用窗口获得焦点时触发，返回取消订阅函数 */
+  onAppFocus: (callback: () => void) => () => void
   // 项目目录管理
   moveToTypeDir: (sourcePath: string, projectType: string, projectName?: string) => Promise<MoveProjectResult>
   renameFolderToMatchName: (projectPath: string, projectDisplayName: string) => Promise<{ success: boolean; newPath: string; error?: string; skipped?: boolean }>

@@ -224,7 +224,7 @@ export function Notes() {
       {/* 头部 */}
       <div className={styles.header}>
         <div>
-          <Title level={2} className={styles.title}>笔记</Title>
+          <Title level={2} className={styles.title}>笔记库</Title>
           <Text type="secondary">开发过程中的学习记录和总结</Text>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>

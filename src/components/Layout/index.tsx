@@ -17,7 +17,8 @@ import {
   MoonOutlined,
   DesktopOutlined,
   GlobalOutlined,
-  CheckOutlined
+  CheckOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons'
 import { SearchModal } from '../SearchBar/SearchModal'
 import { useSync } from '../../contexts/SyncContext'
@@ -25,14 +26,14 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme, type ThemeMode } from '../../contexts/ThemeContext'
 import styles from './Layout.module.css'
 
-// Nexus Logo - 直接使用 app 图标
+// Nexus Logo - 与系统图标一致的圆角（约 22% 圆角）
 const NexusLogo: React.FC<{ size?: number }> = ({ size = 28 }) => (
   <img 
     src="/icon.png" 
-    alt="Nexus" 
+    alt="码迹" 
     width={size} 
     height={size} 
-    style={{ borderRadius: size * 0.2, display: 'block' }} 
+    style={{ borderRadius: Math.round(size * 0.28), display: 'block' }} 
   />
 )
 
@@ -311,6 +312,7 @@ function LayoutInner({ children }: LayoutProps) {
     { key: '/notes', icon: <FileTextOutlined />, label: t.menu.notes },
     { key: '/github', icon: <GithubOutlined />, label: t.menu.devLibrary },
     { type: 'divider' as const },
+    { key: '/guide', icon: <QuestionCircleOutlined />, label: '新手指南' },
     { key: '/settings', icon: <SettingOutlined />, label: t.menu.templateSettings },
   ]
 
@@ -335,6 +337,7 @@ function LayoutInner({ children }: LayoutProps) {
     const path = location.pathname
     if (path.startsWith('/knowledge')) return ['/knowledge']
     if (path.startsWith('/projects')) return ['/projects']
+    if (path.startsWith('/guide')) return ['/guide']
     return [path]
   }
 
@@ -354,8 +357,8 @@ function LayoutInner({ children }: LayoutProps) {
             <>
               <div className={styles.logoIcon}><NexusLogo size={28} /></div>
               <div className={styles.logoTextContainer}>
-                <Title level={4} className={styles.logoText}>Nexus</Title>
-                <span className={styles.version}>v5.0</span>
+                <Title level={4} className={styles.logoText}>Nexus 码迹</Title>
+                <span className={styles.version}>v2.0</span>
               </div>
             </>
           ) : (

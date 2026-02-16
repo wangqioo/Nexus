@@ -160,6 +160,14 @@ export function Projects() {
     loadProjects()
   }, [])
 
+  // 每次窗口获得焦点时自动刷新项目列表（打开软件或从后台切回时）
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onAppFocus?.(() => {
+      loadProjects()
+    })
+    return () => unsubscribe?.()
+  }, [])
+
   useEffect(() => {
     const load = async () => {
       if (window.electronAPI?.getCustomProjectTypes) {
@@ -407,7 +415,7 @@ export function Projects() {
     }
     
     if (!apiKey) {
-      message.warning('请先配置智谱 API Key')
+      message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
     
@@ -1063,7 +1071,7 @@ export function Projects() {
   const handleGenerateSummary = async () => {
     if (!selectedProject) return
     if (!apiKey) {
-      message.warning('请先在导入弹窗或设置中填写智谱 API Key')
+      message.warning('请先在导入弹窗或设置 → 大模型 API 中配置 API Key')
       return
     }
     setGeneratingSummaryForId(selectedProject.id)
@@ -1100,7 +1108,7 @@ export function Projects() {
   const handleReAnalyzeImported = async () => {
     if (!importedProject) return
     if (!apiKey) {
-      message.warning('请先在导入弹窗或设置中填写智谱 API Key')
+      message.warning('请先在导入弹窗或设置 → 大模型 API 中配置 API Key')
       return
     }
     setReAnalyzingImport(true)
@@ -1333,7 +1341,7 @@ export function Projects() {
     }
     
     if (!apiKey) {
-      message.warning('请先配置智谱 API Key')
+      message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
     
@@ -1830,7 +1838,7 @@ export function Projects() {
                 rules={[{ required: true, message: '请选择项目文件夹' }]}
               >
                 <Space.Compact style={{ width: '100%' }}>
-                  <Input placeholder="/Users/wq/Workshop/MCU/..." style={{ flex: 1 }} disabled />
+                  <Input placeholder="选择文件夹后显示路径" style={{ flex: 1 }} disabled />
                   <Button onClick={handleSelectFolder}>选择文件夹</Button>
                   <Tooltip title="用智谱 AI 分析项目并自动添加">
                     <Button
@@ -2018,7 +2026,7 @@ export function Projects() {
           <div className={styles.modalInfoBox}>
             <Space>
               <Input.Password
-                placeholder="智谱 API Key（AI 分析需要）"
+                placeholder="API Key（设置 → 大模型 API，AI 分析需要）"
                 value={apiKey}
                 onChange={e => {
                   setApiKey(e.target.value)

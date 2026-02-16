@@ -32,7 +32,7 @@ export const zh = {
     dashboard: '仪表盘',
     projects: '项目管理',
     knowledge: '知识库',
-    notes: '笔记',
+    notes: '笔记库',
     devLibrary: '开发库',
     templateSettings: '模板设置',
   },
@@ -114,9 +114,9 @@ export const zh = {
     totalItems: '共 {count} 条',
   },
 
-  // 笔记
+  // 笔记库
   notes: {
-    title: '笔记',
+    title: '笔记库',
     newNote: '新建笔记',
     searchNotes: '搜索笔记...',
     untitled: '无标题',
@@ -127,6 +127,7 @@ export const zh = {
   // 开发库 (GitHub)
   devLibrary: {
     title: '开发库',
+    subtitle: '常用芯片厂商例程的快速链接，方便一键打开或克隆到本地。',
     searchRepos: '搜索仓库...',
     starred: '已收藏',
     clone: '克隆',

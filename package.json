@@ -11,10 +11,12 @@
     "preview": "vite preview",
     "vite:dev": "node --no-deprecation node_modules/vite/bin/vite.js",
     "electron:dev": "concurrently -k \"npm run vite:dev\" \"node scripts/wait-vite.js && npm run electron:start\"",
+    "electron:dev:first": "RESET_ONBOARDING=1 npm run electron:dev",
     "electron:start": "node scripts/build-electron.js && electron .",
     "electron:start:prod": "npm run build && node scripts/build-electron.js && NODE_ENV=production electron .",
-    "electron:build": "npm run build && node scripts/build-electron.js && electron-builder --mac",
-    "electron:build:mac": "npm run build && node scripts/build-electron.js && electron-builder --mac",
+    "build:icon": "bash scripts/build-app-icon.sh",
+    "electron:build": "npm run build && node scripts/build-electron.js && npm run build:icon && electron-builder --mac",
+    "electron:build:mac": "npm run build && node scripts/build-electron.js && npm run build:icon && electron-builder --mac",
     "electron:build:win": "npm run build && node scripts/build-electron.js && electron-builder --win",
     "electron:build:linux": "npm run build && node scripts/build-electron.js && electron-builder --linux"
   },
@@ -40,6 +42,7 @@
     "electron": "^28.3.3",
     "electron-builder": "^24.12.0",
     "esbuild": "^0.20.0",
+    "sharp": "^0.34.5",
     "typescript": "^5.3.3",
     "vite": "^5.1.0"
   },

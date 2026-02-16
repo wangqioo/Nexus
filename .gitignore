@@ -34,8 +34,13 @@ npm-debug.log*
 .eslintcache
 .vite-dev-port
 
-# 个人项目数据（勿提交到公开仓库）
+# 个人项目数据与敏感信息（勿提交到公开仓库）
 *_analysis.json
 docs/wq-projects-overview.md
 check-data.js
+.cursor/
+.nexus/
+config.json
+local-projects.json
+repos.json
 

@@ -5,14 +5,16 @@
  */
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 
+const workshop = path.join(os.homedir(), 'Workshop')
 const TYPE_DIRS = [
-  '/Users/wq/Workshop/MCU',
-  '/Users/wq/Workshop/AI',
-  '/Users/wq/Workshop/Software',
-  '/Users/wq/Workshop/Linux',
-  '/Users/wq/Workshop/Mobile',
-  '/Users/wq/Workshop/Remote',
+  path.join(workshop, 'MCU'),
+  path.join(workshop, 'AI'),
+  path.join(workshop, 'Software'),
+  path.join(workshop, 'Linux'),
+  path.join(workshop, 'Mobile'),
+  path.join(workshop, 'Remote'),
 ]
 
 function isEmptyDir(dir) {

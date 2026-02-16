@@ -13,6 +13,7 @@ import { GitHub } from './pages/GitHub'
 import { Projects } from './pages/Projects'
 import { Knowledge } from './pages/Knowledge'
 import { Settings } from './pages/Settings'
+import { Guide } from './pages/Guide'
 import { Onboarding } from './components/Onboarding'
 
 // 配置全局消息提示位置
@@ -30,6 +31,14 @@ function AppInner() {
   const { isDark } = useTheme()
 
   useEffect(() => {
+    // 支持通过 ?resetOnboarding=1 进入首次使用模式
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('resetOnboarding') === '1') {
+      localStorage.removeItem(ONBOARDING_KEY)
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash)
+      setShowOnboarding(true)
+      return
+    }
     // 检查是否首次打开
     const completed = localStorage.getItem(ONBOARDING_KEY)
     if (!completed) {
@@ -78,6 +87,7 @@ function AppInner() {
               <Route path="/notes" element={<Notes />} />
               <Route path="/github" element={<GitHub />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/guide" element={<Guide />} />
             </Routes>
           </Layout>
           

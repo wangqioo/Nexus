@@ -19,13 +19,17 @@ function waitForPortFile(retries = 0) {
   })
 }
 
-function checkServer(port) {
+function checkServer(port, retries = 0) {
+  const MAX_SERVER_RETRIES = 24
   return new Promise((resolve, reject) => {
     const req = http.get(`http://localhost:${port}`, (res) => {
       console.log('Vite server is ready!')
       resolve()
     })
-    req.on('error', reject)
+    req.on('error', (err) => {
+      if (retries >= MAX_SERVER_RETRIES) return reject(err)
+      setTimeout(() => checkServer(port, retries + 1).then(resolve).catch(reject), 500)
+    })
     req.end()
   })
 }

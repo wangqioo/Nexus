@@ -295,14 +295,14 @@ function getSilSubdirs(templateConfig: typeof DEFAULT_TEMPLATE_CONFIG): string[]
   return dirs
 }
 
-// 项目类型定义表（id + dir；templateRef 仅作兼容保留，.nexus 已统一使用一份模板）
+// 项目类型定义表（id + dir；使用用户主目录下的 Workshop，无个人路径）
 const PROJECT_TYPE_DEFS: { id: string; templateRef: KnowledgeCategory; dir: string }[] = [
-  { id: 'mcu', templateRef: 'mcu', dir: '/Users/wq/Workshop/MCU' },
-  { id: 'ai', templateRef: 'ai', dir: '/Users/wq/Workshop/AI' },
-  { id: 'software', templateRef: 'software', dir: '/Users/wq/Workshop/Software' },
-  { id: 'linux', templateRef: 'linux', dir: '/Users/wq/Workshop/Linux' },
-  { id: 'mobile', templateRef: 'mobile', dir: '/Users/wq/Workshop/Mobile' },
-  { id: 'remote', templateRef: 'remote', dir: '/Users/wq/Workshop/Remote' },
+  { id: 'mcu', templateRef: 'mcu', dir: path.join(os.homedir(), 'Workshop', 'MCU') },
+  { id: 'ai', templateRef: 'ai', dir: path.join(os.homedir(), 'Workshop', 'AI') },
+  { id: 'software', templateRef: 'software', dir: path.join(os.homedir(), 'Workshop', 'Software') },
+  { id: 'linux', templateRef: 'linux', dir: path.join(os.homedir(), 'Workshop', 'Linux') },
+  { id: 'mobile', templateRef: 'mobile', dir: path.join(os.homedir(), 'Workshop', 'Mobile') },
+  { id: 'remote', templateRef: 'remote', dir: path.join(os.homedir(), 'Workshop', 'Remote') },
 ]
 
 // 自定义项目类型（用户通过「无法归类」流程创建）
@@ -365,6 +365,50 @@ function loadTemplateConfig(): typeof DEFAULT_TEMPLATE_CONFIG {
     console.error('[Nexus] 读取模板配置失败:', e)
   }
   return { ...DEFAULT_TEMPLATE_CONFIG }
+}
+
+const AI_PRESETS: Record<string, { url: string; model: string }> = {
+  zhipu: { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash' },
+  openai: { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
+  kimi: { url: 'https://api.moonshot.ai/v1/chat/completions', model: 'moonshot-v1-8k' },
+  minimax: { url: 'https://api.minimax.io/v1/text/chatcompletion_v2', model: 'abab6.5s-chat' },
+}
+
+/** 从 config.json 读取 AI 配置，返回请求 URL、API Key、模型。支持智谱/OpenAI/Kimi/MiniMax 预设与自定义。 */
+function getAiRequestOptions(passedApiKey?: string): { url: string; apiKey: string; model: string } | null {
+  const configPath = path.join(DATA_DIR, 'config.json')
+  let config: Record<string, unknown> = {}
+  try {
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+    }
+  } catch (_) {}
+  const provider = (config.ai_provider as string) || 'zhipu'
+
+  if (provider === 'custom') {
+    const base = (config.ai_base_url as string)?.trim()
+    const key = (config.ai_api_key as string)?.trim()
+    const model = (config.ai_model as string)?.trim() || 'gpt-4o-mini'
+    if (base && key) {
+      const url = base.replace(/\/$/, '') + '/chat/completions'
+      return { url, apiKey: key, model }
+    }
+    return null
+  }
+
+  if (AI_PRESETS[provider]) {
+    const preset = AI_PRESETS[provider]
+    const key = (passedApiKey || config.ai_api_key) as string
+    if (!key?.trim()) return null
+    const model = (config.ai_model as string)?.trim() || preset.model
+    return { url: preset.url, apiKey: key.trim(), model }
+  }
+
+  // 智谱
+  const key = (passedApiKey || config.zhipu_api_key) as string
+  if (!key?.trim()) return null
+  const preset = AI_PRESETS.zhipu
+  return { url: preset.url, apiKey: key.trim(), model: preset.model }
 }
 
 // 递增版本号
@@ -762,9 +806,9 @@ function convertToKnowledgeEntry(data: any, category: string, filename: string):
 }
 
 function createWindow() {
-  // 应用图标路径
+  // 应用图标：与面板内 Nexus 旁的图标一致，使用 public/icon.png
   const iconPath = isDev
-    ? path.join(__dirname, '../build/icon.png')
+    ? path.join(app.getAppPath(), 'public', 'icon.png')
     : path.join(process.resourcesPath, 'icon.png')
 
   const mainWindow = new BrowserWindow({
@@ -783,12 +827,22 @@ function createWindow() {
     backgroundColor: '#0a0a0a'
   })
 
+  // macOS Dock 图标：与窗口一致，使用 public/icon.png
+  if (process.platform === 'darwin' && fs.existsSync(iconPath)) {
+    app.dock.setIcon(iconPath)
+  }
+
   // 阻止外部链接在 Electron 内打开新窗口，改为系统浏览器
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url)
     }
     return { action: 'deny' }
+  })
+
+  // 窗口获得焦点时通知渲染进程，便于项目管理等页面自动刷新
+  mainWindow.on('focus', () => {
+    mainWindow.webContents.send('app:focus')
   })
 
   if (isDev) {
@@ -800,8 +854,8 @@ function createWindow() {
         if (p > 0) port = p
       }
     } catch (_) {}
-    mainWindow.loadURL(`http://localhost:${port}`)
-    mainWindow.webContents.openDevTools()  // 调试
+    const resetOnboarding = process.env.RESET_ONBOARDING === '1'
+    mainWindow.loadURL(`http://localhost:${port}${resetOnboarding ? '?resetOnboarding=1' : ''}`)
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
@@ -986,6 +1040,14 @@ ipcMain.handle('project:analyze', async (_, projectPath: string) => {
   }
 })
 
+// 开发库默认配置路径（不写死用户名，便于开源）
+ipcMain.handle('project:getDefaultReposConfigPath', async () => {
+  return path.join(os.homedir(), 'Workshop', 'MCU', '_github', 'repos.json')
+})
+ipcMain.handle('project:getDefaultReposBasePath', async () => {
+  return path.join(os.homedir(), 'Workshop', 'MCU', '_github')
+})
+
 ipcMain.handle('project:readFile', async (_, filePath: string) => {
   try {
     if (fs.existsSync(filePath)) {
@@ -1062,13 +1124,14 @@ ipcMain.handle('project:verifyPath', async (_, project: { id: string, path: stri
     // 2. 路径不存在，尝试通过 ID 在可能的目录中查找
     const searchDirs: string[] = []
     
-    // 根据项目类型确定搜索目录
+    // 根据项目类型确定搜索目录（仅用用户主目录下的 Workshop，不写死用户名）
+    const workshop = path.join(os.homedir(), 'Workshop')
     const typeBaseDirs: Record<string, string[]> = {
-      mcu: ['/Users/wq/Workshop/MCU', '/Users/wq/flickering_candlelight', '/Users/wq/esp32_c5_imu'],
-      ai: ['/Users/wq/Workshop/AI'],
-      software: ['/Users/wq/Workshop/Software', '/Users/wq'],
-      linux: ['/Users/wq/Workshop/Linux', '/Users/wq/linux'],
-      other: ['/Users/wq/Workshop', '/Users/wq'],
+      mcu: [path.join(workshop, 'MCU')],
+      ai: [path.join(workshop, 'AI')],
+      software: [path.join(workshop, 'Software'), os.homedir()],
+      linux: [path.join(workshop, 'Linux')],
+      other: [workshop, os.homedir()],
     }
     
     // 添加项目类型对应的目录
@@ -1140,12 +1203,13 @@ ipcMain.handle('project:verifyPaths', async (_, projects: Array<{ id: string, pa
         const result = await new Promise<any>((resolve) => {
           // 复用上面的逻辑
           const searchDirs: string[] = []
+          const workshop = path.join(os.homedir(), 'Workshop')
           const typeBaseDirs: Record<string, string[]> = {
-            mcu: ['/Users/wq/Workshop/MCU', '/Users/wq/flickering_candlelight', '/Users/wq/esp32_c5_imu'],
-            ai: ['/Users/wq/Workshop/AI'],
-            software: ['/Users/wq/Workshop/Software', '/Users/wq'],
-            linux: ['/Users/wq/Workshop/Linux', '/Users/wq/linux'],
-            other: ['/Users/wq/Workshop', '/Users/wq'],
+            mcu: [path.join(workshop, 'MCU')],
+            ai: [path.join(workshop, 'AI')],
+            software: [path.join(workshop, 'Software'), os.homedir()],
+            linux: [path.join(workshop, 'Linux')],
+            other: [workshop, os.homedir()],
           }
           
           const baseDirs = typeBaseDirs[project.projectType || 'other'] || typeBaseDirs.other
@@ -1561,8 +1625,9 @@ ipcMain.handle('project:deleteDir', async (_, projectPath: string) => {
       return { success: true, message: '目录不存在' }
     }
     
-    // 安全检查：不允许删除系统目录
-    const safePaths = ['/Users/wq/Workshop/', '/tmp/']
+    // 安全检查：只允许删除用户 Workshop 或 /tmp 下的目录
+    const workshopDir = path.join(os.homedir(), 'Workshop') + path.sep
+    const safePaths = [workshopDir, '/tmp/']
     const isSafe = safePaths.some(safe => projectPath.startsWith(safe))
     if (!isSafe) {
       return { success: false, error: '安全限制：只能删除 Workshop 目录下的项目' }
@@ -1927,15 +1992,17 @@ async function analyzeDocWithAI(
 说明（请按本项目知识库类别填写）：${hintLine}`,
   }
 
+  const opts = getAiRequestOptions(apiKey)
+  if (!opts) return null
   try {
-    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    const response = await fetch(opts.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${opts.apiKey}`
       },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: opts.model,
         messages: [{
           role: 'user',
           content: `${prompts[type]}\n\n文件名: ${filename}\n\n文档内容:\n${content.substring(0, 3000)}`
@@ -2900,15 +2967,19 @@ summary 要求:
 - 提及主要的技术特性或使用场景
 - 如果有依赖关系或配套项目，也简要说明`
 
-    // 调用智谱 API
-    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    const opts = getAiRequestOptions(apiKey)
+    if (!opts) {
+      console.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
+      return null
+    }
+    const response = await fetch(opts.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${opts.apiKey}`
       },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: opts.model,
         messages: [
           { role: 'user', content: prompt }
         ],
@@ -2918,7 +2989,7 @@ summary 要求:
     })
     
     if (!response.ok) {
-      console.error('智谱 API 错误:', response.status)
+      console.error('AI API 错误:', response.status)
       return null
     }
     
@@ -3139,15 +3210,18 @@ ${configTemplate.aiPrompt}
 - 内容要有实际价值，不要泛泛而谈
 - 如果项目信息不足，可以返回空数组`
 
-    // 调用智谱 API
-    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    const opts = getAiRequestOptions(apiKey)
+    if (!opts) {
+      return { success: false, error: '未配置 AI API（请在设置中填写智谱或自定义大模型）' }
+    }
+    const response = await fetch(opts.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${opts.apiKey}`
       },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: opts.model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
         max_tokens: 3000
@@ -3364,15 +3438,19 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
 - 若项目不属于任何一类（如纯游戏、IoT 产品、独立工具），projectType 填新类型英文标识（小写），suggestedNewTypeName 填中文名，confidenceByType 仍给出对六类的推荐占比供用户参考。
 - confidenceByType 必须包含全部六个键，值均为数字且总和为 1。`
 
-    // 调用智谱 API
-    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    const opts = getAiRequestOptions(apiKey)
+    if (!opts) {
+      console.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
+      return null
+    }
+    const response = await fetch(opts.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${opts.apiKey}`
       },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: opts.model,
         messages: [
           { role: 'user', content: prompt }
         ],
@@ -3382,7 +3460,7 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
     })
     
     if (!response.ok) {
-      console.error('智谱 API 错误:', response.status)
+      console.error('AI API 错误:', response.status)
       return null
     }
     

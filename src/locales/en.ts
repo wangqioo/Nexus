@@ -129,6 +129,7 @@ export const en: Locale = {
   // Dev Library (GitHub)
   devLibrary: {
     title: 'Dev Library',
+    subtitle: 'Quick links to chip vendor example code—open or clone with one click.',
     searchRepos: 'Search repositories...',
     starred: 'Starred',
     clone: 'Clone',

@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectConfigFile: () => ipcRenderer.invoke('dialog:selectConfigFile'),
   parseProjectConfig: (content: string) => ipcRenderer.invoke('config:parseProjectConfig', content),
   analyzeProject: (path: string) => ipcRenderer.invoke('project:analyze', path),
+  getDefaultReposConfigPath: () => ipcRenderer.invoke('project:getDefaultReposConfigPath'),
+  getDefaultReposBasePath: () => ipcRenderer.invoke('project:getDefaultReposBasePath'),
   readProjectFile: (path: string) => ipcRenderer.invoke('project:readFile', path),
   writeProjectFile: (path: string, content: string) => ipcRenderer.invoke('project:writeFile', path, content),
   deleteProjectFile: (path: string) => ipcRenderer.invoke('project:deleteFile', path),
@@ -58,7 +60,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openInTerminal: (path: string) => ipcRenderer.invoke('shell:openInTerminal', path),
   openInCursor: (path: string) => ipcRenderer.invoke('shell:openInCursor', path),
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
-  
+
+  // 应用窗口获得焦点时触发（用于自动刷新项目管理等）
+  onAppFocus: (callback: () => void) => {
+    const fn = () => callback()
+    ipcRenderer.on('app:focus', fn)
+    return () => ipcRenderer.removeListener('app:focus', fn)
+  },
+
   // 项目目录管理
   moveToTypeDir: (sourcePath: string, projectType: string, projectName?: string) =>
     ipcRenderer.invoke('project:moveToTypeDir', sourcePath, projectType, projectName ?? ''),
