@@ -5,6 +5,7 @@
 
 import type { Note, KnowledgeEntry, ProjectType } from '../types'
 import { KNOWLEDGE_CATEGORIES } from '../types'
+import { logger } from '../utils/logger'
 
 // 检查是否在 Electron 环境中
 const isElectron = () => {
@@ -109,7 +110,7 @@ async function readMarkdownAsKnowledge(
       updatedAt: parsed.updatedAt,
     }
   } catch (e) {
-    console.error('Error reading markdown as knowledge:', e)
+    logger.error('Error reading markdown as knowledge:', e)
     return null
   }
 }
@@ -133,7 +134,7 @@ async function listAllKnowledge(
       const topDirs = await listDir('knowledge')
       types = topDirs.filter(d => !d.includes('.')) // 只取子目录名（如 mcu、software、game）
     } catch {
-      types = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
+      types = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote', 'fpga']
     }
   }
   
@@ -252,7 +253,7 @@ async function readMarkdownAsNote(filePath: string, filename: string): Promise<N
       updatedAt: parsed.updatedAt,
     } as Note
   } catch (e) {
-    console.error('Error reading markdown as note:', e)
+    logger.error('Error reading markdown as note:', e)
     return null
   }
 }

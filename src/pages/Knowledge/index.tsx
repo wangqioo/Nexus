@@ -13,6 +13,7 @@ import { storage } from '../../services/storage'
 import type { KnowledgeEntry, ProjectType } from '../../types'
 import { PROJECT_TYPES, FIXED_KNOWLEDGE_CATEGORIES, KNOWLEDGE_CATEGORIES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
+import { logger } from '../../utils/logger'
 import styles from './Knowledge.module.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -93,7 +94,7 @@ export function Knowledge() {
       const data = await storage.listAllKnowledge()
       setEntries(data)
     } catch (e) {
-      console.error('Failed to load knowledge:', e)
+      logger.error('Failed to load knowledge:', e)
     }
     setLoading(false)
   }

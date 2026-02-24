@@ -4,6 +4,8 @@ import * as fs from 'fs'
 import * as os from 'os'
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
+import { logger } from './utils/logger'
+import { callAIWithRetry } from './utils/ai-retry'
 
 const execAsync = promisify(exec)
 
@@ -236,7 +238,7 @@ function getBundledTemplateConfig(category: KnowledgeCategory): typeof DEFAULT_T
       }
       return merged as typeof DEFAULT_TEMPLATE_CONFIG
     } catch (e) {
-      console.error('[Nexus] getBundledTemplateConfig 解析失败:', category, e)
+      logger.error('getBundledTemplateConfig 解析失败:', category, e)
     }
   }
   return JSON.parse(JSON.stringify(DEFAULT_TEMPLATE_CONFIG)) as typeof DEFAULT_TEMPLATE_CONFIG
@@ -255,11 +257,11 @@ function ensureTemplatesDir() {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
         const config = getBundledTemplateConfig(ref)
         fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf-8')
-        console.log(`[Nexus] 已种子模板: ${ref}`)
+        logger.info(`已种子模板: ${ref}`)
       }
     }
   } catch (e) {
-    console.error('[Nexus] ensureTemplatesDir:', e)
+    logger.error('ensureTemplatesDir:', e)
   }
 }
 
@@ -281,7 +283,7 @@ function getTemplateConfigForCategory(category: KnowledgeCategory): typeof DEFAU
       }
       return merged as typeof DEFAULT_TEMPLATE_CONFIG
     } catch (e) {
-      console.error('[Nexus] 读取模板失败，回退内置:', category, e)
+      logger.error('读取模板失败，回退内置:', category, e)
     }
   }
   return getBundledTemplateConfig(category)
@@ -303,6 +305,7 @@ const PROJECT_TYPE_DEFS: { id: string; templateRef: KnowledgeCategory; dir: stri
   { id: 'linux', templateRef: 'linux', dir: path.join(os.homedir(), 'Workshop', 'Linux') },
   { id: 'mobile', templateRef: 'mobile', dir: path.join(os.homedir(), 'Workshop', 'Mobile') },
   { id: 'remote', templateRef: 'remote', dir: path.join(os.homedir(), 'Workshop', 'Remote') },
+  { id: 'fpga', templateRef: 'software', dir: path.join(os.homedir(), 'Workshop', 'FPGA') },
 ]
 
 // 自定义项目类型（用户通过「无法归类」流程创建）
@@ -314,7 +317,7 @@ function loadCustomProjectTypes(): CustomProjectType[] {
       const data = JSON.parse(fs.readFileSync(CUSTOM_PROJECT_TYPES_FILE, 'utf-8'))
       return Array.isArray(data.types) ? data.types : []
     }
-  } catch (e) { console.error('[Nexus] loadCustomProjectTypes:', e) }
+  } catch (e) { logger.error('loadCustomProjectTypes:', e) }
   return []
 }
 function saveCustomProjectTypes(types: CustomProjectType[]): boolean {
@@ -362,7 +365,7 @@ function loadTemplateConfig(): typeof DEFAULT_TEMPLATE_CONFIG {
       }
     }
   } catch (e) {
-    console.error('[Nexus] 读取模板配置失败:', e)
+    logger.error('读取模板配置失败:', e)
   }
   return { ...DEFAULT_TEMPLATE_CONFIG }
 }
@@ -490,14 +493,14 @@ function saveTemplateConfig(config: Partial<typeof DEFAULT_TEMPLATE_CONFIG>): bo
       newConfig.version = newVersion
       newConfig.versionHistory = [...(newConfig.versionHistory || []), versionRecord]
       
-      console.log(`[Nexus] 模板配置版本升级: ${current.version} -> ${newVersion}`)
+      logger.info(`模板配置版本升级: ${current.version} -> ${newVersion}`)
     }
     
     fs.writeFileSync(TEMPLATE_CONFIG_FILE, JSON.stringify(newConfig, null, 2), 'utf-8')
-    console.log('[Nexus] 模板配置已更新')
+    logger.info('模板配置已更新')
     return true
   } catch (e) {
-    console.error('[Nexus] 保存模板配置失败:', e)
+    logger.error('保存模板配置失败:', e)
     return false
   }
 }
@@ -529,9 +532,9 @@ function recordProjectTemplateUsage(projectPath: string, projectName: string, te
     // 直接写入文件（不触发版本递增）
     const newConfig = { ...config, projectUsages: usages }
     fs.writeFileSync(TEMPLATE_CONFIG_FILE, JSON.stringify(newConfig, null, 2), 'utf-8')
-    console.log(`[Nexus] 记录项目模板使用: ${projectName} -> v${templateVersion}`)
+    logger.info(`记录项目模板使用: ${projectName} -> v${templateVersion}`)
   } catch (e) {
-    console.error('[Nexus] 记录项目模板使用失败:', e)
+    logger.error('记录项目模板使用失败:', e)
   }
 }
 
@@ -545,7 +548,7 @@ function ensureDataDirs() {
   ]
   
   // 为所有项目类型创建知识库子目录
-  const types = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
+  const types = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote', 'fpga']
   for (const type of types) {
     dirs.push(path.join(DATA_DIR, 'knowledge', type))
   }
@@ -571,7 +574,7 @@ function migrateOldDataToKnowledge() {
     return
   }
   
-  console.log('[Nexus] 开始数据迁移: 旧格式 -> 知识库格式...')
+  logger.info('开始数据迁移: 旧格式 -> 知识库格式...')
   
   const categoryMap: Record<string, string> = {
     'platforms': 'platform',
@@ -656,7 +659,7 @@ function migrateOldDataToKnowledge() {
           fs.unlinkSync(sourcePath)
         }
       } catch (e) {
-        console.error(`[Nexus] 迁移文件失败 ${file}:`, e)
+        logger.error(`迁移文件失败 ${file}:`, e)
       }
     }
     
@@ -665,12 +668,12 @@ function migrateOldDataToKnowledge() {
       const remaining = fs.readdirSync(sourceDir)
       if (remaining.length === 0) {
         fs.rmdirSync(sourceDir)
-        console.log(`[Nexus] 已删除旧目录: ${oldDir}/`)
+        logger.info(`已删除旧目录: ${oldDir}/`)
       }
     } catch {}
   }
   
-  console.log(`[Nexus] 数据迁移完成: ${totalMigrated} 个文件已迁移`)
+  logger.info(`数据迁移完成: ${totalMigrated} 个文件已迁移`)
   
   // 写入迁移标记
   fs.writeFileSync(migrationFlag, JSON.stringify({
@@ -870,7 +873,7 @@ ipcMain.handle('fs:readFile', async (_, filePath: string) => {
     }
     return null
   } catch (error) {
-    console.error('Error reading file:', error)
+    logger.error('Error reading file:', error)
     return null
   }
 })
@@ -885,7 +888,7 @@ ipcMain.handle('fs:writeFile', async (_, filePath: string, content: string) => {
     fs.writeFileSync(fullPath, content, 'utf-8')
     return true
   } catch (error) {
-    console.error('Error writing file:', error)
+    logger.error('Error writing file:', error)
     return false
   }
 })
@@ -898,7 +901,7 @@ ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
     }
     return true
   } catch (error) {
-    console.error('Error deleting file:', error)
+    logger.error('Error deleting file:', error)
     return false
   }
 })
@@ -911,7 +914,7 @@ ipcMain.handle('fs:listFiles', async (_, dirPath: string) => {
     }
     return []
   } catch (error) {
-    console.error('Error listing files:', error)
+    logger.error('Error listing files:', error)
     return []
   }
 })
@@ -944,7 +947,7 @@ ipcMain.handle('template:reset', async () => {
       fs.unlinkSync(TEMPLATE_CONFIG_FILE)
     }
   } catch (e) {
-    console.error('[Nexus] 删除模板配置失败:', e)
+    logger.error('删除模板配置失败:', e)
   }
   return { ...DEFAULT_TEMPLATE_CONFIG }
 })
@@ -953,21 +956,22 @@ ipcMain.handle('template:reset', async () => {
 // 读取 Markdown 文件并解析 frontmatter
 ipcMain.handle('fs:readMarkdown', async (_, filePath: string) => {
   try {
-    const fullPath = path.join(DATA_DIR, filePath)
-    if (fs.existsSync(fullPath)) {
-      const content = fs.readFileSync(fullPath, 'utf-8')
-      const parsed = parseMarkdownWithFrontmatter(content)
-      const stats = fs.statSync(fullPath)
-      return {
-        frontmatter: parsed.frontmatter,
-        content: parsed.content,
-        createdAt: stats.birthtime.toISOString(),
-        updatedAt: stats.mtime.toISOString(),
-      }
+    const fullPath = path.isAbsolute(filePath) ? filePath : path.join(DATA_DIR, filePath)
+    if (!fs.existsSync(fullPath)) {
+      return null
     }
-    return null
+    
+    const content = fs.readFileSync(fullPath, 'utf-8')
+    const parsed = parseMarkdownWithFrontmatter(content)
+    const stats = fs.statSync(fullPath)
+    return {
+      frontmatter: parsed.frontmatter,
+      content: parsed.content,
+      createdAt: stats.birthtime.toISOString(),
+      updatedAt: stats.mtime.toISOString(),
+    }
   } catch (error) {
-    console.error('Error reading markdown:', error)
+    logger.error('Error reading markdown:', error)
     return null
   }
 })
@@ -999,7 +1003,7 @@ ipcMain.handle('dialog:selectConfigFile', async () => {
       const content = fs.readFileSync(result.filePaths[0], 'utf-8')
       return { path: result.filePaths[0], content }
     } catch (e) {
-      console.error('Read config file error:', e)
+      logger.error('Read config file error:', e)
       return null
     }
   }
@@ -1025,7 +1029,7 @@ ipcMain.handle('config:parseProjectConfig', (_, content: string) => {
       projectType,
     }
   } catch (e) {
-    console.error('Parse project config error:', e)
+    logger.error('Parse project config error:', e)
     return null
   }
 })
@@ -1035,7 +1039,7 @@ ipcMain.handle('project:analyze', async (_, projectPath: string) => {
     const analysis = await analyzeProject(projectPath)
     return analysis
   } catch (error) {
-    console.error('Error analyzing project:', error)
+    logger.error('Error analyzing project:', error)
     return null
   }
 })
@@ -1068,7 +1072,7 @@ ipcMain.handle('project:writeFile', async (_, filePath: string, content: string)
     fs.writeFileSync(filePath, content, 'utf-8')
     return true
   } catch (error) {
-    console.error('Error writing file:', error)
+    logger.error('Error writing file:', error)
     return false
   }
 })
@@ -1080,7 +1084,7 @@ ipcMain.handle('project:deleteFile', async (_, filePath: string) => {
     }
     return true
   } catch (error) {
-    console.error('Error deleting file:', error)
+    logger.error('Error deleting file:', error)
     return false
   }
 })
@@ -1092,7 +1096,7 @@ ipcMain.handle('project:listDir', async (_, dirPath: string) => {
     }
     return []
   } catch (error) {
-    console.error('Error listing directory:', error)
+    logger.error('Error listing directory:', error)
     return []
   }
 })
@@ -1162,7 +1166,7 @@ ipcMain.handle('project:verifyPath', async (_, project: { id: string, path: stri
               // 简单解析 YAML 中的 id 字段
               const idMatch = yamlContent.match(/^id:\s*["']?([^"'\n]+)["']?/m)
               if (idMatch && idMatch[1] === project.id) {
-                console.log(`[Nexus] 项目路径变化检测: ${project.path} -> ${candidatePath}`)
+                logger.info(`项目路径变化检测: ${project.path} -> ${candidatePath}`)
                 return {
                   valid: false,
                   newPath: candidatePath,
@@ -1185,7 +1189,7 @@ ipcMain.handle('project:verifyPath', async (_, project: { id: string, path: stri
       reason: '项目路径不存在，且未能在常用目录中找到'
     }
   } catch (error) {
-    console.error('验证项目路径失败:', error)
+    logger.error('验证项目路径失败:', error)
     return { valid: false, reason: '验证失败: ' + (error as Error).message }
   }
 })
@@ -1265,7 +1269,7 @@ ipcMain.handle('project:createDir', async (_, dirPath: string) => {
     }
     return true
   } catch (error) {
-    console.error('Error creating directory:', error)
+    logger.error('Error creating directory:', error)
     return false
   }
 })
@@ -1345,7 +1349,7 @@ ipcMain.handle('git:clone', async (event, url: string, targetPath: string, branc
 
     return { success: true, message: `克隆成功: ${path.basename(targetPath)}` }
   } catch (error: any) {
-    console.error('Git clone error:', error)
+    logger.error('Git clone error:', error)
     const errMsg = error?.message || String(error)
     const short = errMsg.length > 200 ? errMsg.slice(0, 197) + '...' : errMsg
     return { success: false, message: '克隆失败', error: short }
@@ -1374,7 +1378,7 @@ ipcMain.handle('git:pull', async (_, repoPath: string) => {
       message: stdout.includes('Already up to date') ? '已是最新版本' : '更新成功'
     }
   } catch (error: any) {
-    console.error('Git pull error:', error)
+    logger.error('Git pull error:', error)
     return { 
       success: false, 
       message: '拉取失败', 
@@ -1433,7 +1437,7 @@ ipcMain.handle('git:status', async (_, repoPath: string) => {
       lastCommitDate
     }
   } catch (error) {
-    console.error('Git status error:', error)
+    logger.error('Git status error:', error)
     return { exists: true, isRepo: false }
   }
 })
@@ -1562,7 +1566,7 @@ ipcMain.handle('project:moveToTypeDir', async (_, sourcePath: string, projectTyp
     await execAsync(`mv "${sourcePath}" "${targetPath}"`)
     return { success: true, newPath: targetPath, moved: true }
   } catch (error: any) {
-    console.error('移动项目目录失败:', error)
+    logger.error('移动项目目录失败:', error)
     return { success: false, error: error.message, newPath: sourcePath }
   }
 })
@@ -1593,7 +1597,7 @@ ipcMain.handle('project:renameFolderToMatchName', async (_, projectPath: string,
     await execAsync(`mv "${projectPath}" "${targetPath}"`)
     return { success: true, newPath: targetPath, skipped: false }
   } catch (error: any) {
-    console.error('重命名项目文件夹失败:', error)
+    logger.error('重命名项目文件夹失败:', error)
     return { success: false, error: error.message, newPath: projectPath }
   }
 })
@@ -1643,7 +1647,7 @@ ipcMain.handle('project:deleteDir', async (_, projectPath: string) => {
       return { success: true, message: '已删除' }
     }
   } catch (error: any) {
-    console.error('删除项目目录失败:', error)
+    logger.error('删除项目目录失败:', error)
     return { success: false, error: error.message }
   }
 })
@@ -1760,7 +1764,7 @@ ipcMain.handle('sil:init', async (_, projectPath: string, config: any) => {
       ...templateConfig,
       knowledgeCategories: FIXED_KNOWLEDGE_CATEGORIES_FOR_NEXUS,
     }
-    console.log(`[Nexus] 初始化 .nexus projectType: ${projectType}, 知识分类: 4 类统一（一份模板）`)
+    logger.info(`初始化 .nexus projectType: ${projectType}, 知识分类: 4 类统一（一份模板）`)
     
     if (!fs.existsSync(silPath)) {
       fs.mkdirSync(silPath, { recursive: true })
@@ -1852,7 +1856,7 @@ ${templates.snippet.contentTemplate}
     
     return true
   } catch (error) {
-    console.error('Error initializing .nexus:', error)
+    logger.error('Error initializing .nexus:', error)
     return false
   }
 })
@@ -1911,7 +1915,7 @@ ipcMain.handle('sil:scan', async (_, projectPath: string) => {
       lastSyncAt: config.lastSyncAt,
     }
   } catch (error) {
-    console.error('Error scanning .nexus:', error)
+    logger.error('Error scanning .nexus:', error)
     return null
   }
 })
@@ -1995,35 +1999,21 @@ async function analyzeDocWithAI(
   const opts = getAiRequestOptions(apiKey)
   if (!opts) return null
   try {
-    const response = await fetch(opts.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${opts.apiKey}`
-      },
-      body: JSON.stringify({
-        model: opts.model,
-        messages: [{
-          role: 'user',
-          content: `${prompts[type]}\n\n文件名: ${filename}\n\n文档内容:\n${content.substring(0, 3000)}`
-        }],
-        temperature: 0.3,
-        max_tokens: 1000
-      })
-    })
-
-    if (!response.ok) return null
-
-    const data = await response.json()
-    const text = data.choices?.[0]?.message?.content || ''
+    const prompt = `${prompts[type]}\n\n文件名: ${filename}\n\n文档内容:\n${content.substring(0, 3000)}`
+    const retryResult = await callAIWithRetry(opts, prompt, { maxRetries: 2 })
     
+    if (!retryResult.success || !retryResult.data) {
+      return null
+    }
+    
+    const text = retryResult.data
     // 提取 JSON
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0])
     }
   } catch (e) {
-    console.error('AI 分析失败:', e)
+    logger.error('AI 分析失败:', e)
   }
   return null
 }
@@ -2084,7 +2074,7 @@ ipcMain.handle('sil:checkPending', async (_, projectPath: string, projectType?: 
       details // { debug: 2, notes: 1, ... }
     }
   } catch (error) {
-    console.error('检测待同步文档失败:', error)
+    logger.error('检测待同步文档失败:', error)
     return { hasPending: false, pendingCount: 0, details: {} }
   }
 })
@@ -2231,7 +2221,7 @@ ipcMain.handle('knowledge:clear', async () => {
     
     return { success: true, deleted }
   } catch (error) {
-    console.error('清理知识库失败:', error)
+    logger.error('清理知识库失败:', error)
     return { success: false, deleted: 0, error: (error as Error).message }
   }
 })
@@ -2309,7 +2299,7 @@ ipcMain.handle('sil:resetAllSyncData', async () => {
       errors: errors.length ? errors : undefined,
     }
   } catch (error: any) {
-    console.error('resetAllSyncData failed:', error)
+    logger.error('resetAllSyncData failed:', error)
     return {
       success: false,
       centralDeleted,
@@ -2439,7 +2429,7 @@ ipcMain.handle('sil:reverseSync', async () => {
     
     return { success: true, synced, skipped, errors }
   } catch (error) {
-    console.error('反向同步失败:', error)
+    logger.error('反向同步失败:', error)
     return { success: false, synced: 0, skipped: 0, errors: [(error as Error).message] }
   }
 })
@@ -2542,7 +2532,7 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
     const fromProjectYaml = getProjectType(projectPath)
     const resolvedType = fromProjectYaml || projectType || detectProjectType(projectPath)
     const templateConfig = loadTemplateConfig()
-    console.log(`[Sync] 项目路径: ${projectPath}, 类型: ${resolvedType}${fromProjectYaml ? ' (project.yaml)' : projectType ? ' (前端指定)' : ' (路径推断)'}（一份模板）`)
+    logger.info(`[Sync] 项目路径: ${projectPath}, 类型: ${resolvedType}${fromProjectYaml ? ' (project.yaml)' : projectType ? ' (前端指定)' : ' (路径推断)'}（一份模板）`)
     
     // 尝试从配置文件读取 API Key
     let actualApiKey = apiKey
@@ -2749,7 +2739,7 @@ ipcMain.handle('sil:syncTo', async (_, projectPath: string, data: any) => {
     
     return true
   } catch (error) {
-    console.error('Error syncing to project:', error)
+    logger.error('Error syncing to project:', error)
     return false
   }
 })
@@ -2923,7 +2913,7 @@ ipcMain.handle('ai:analyzeGitHubRepo', async (_, url: string, apiKey: string) =>
         }
       }
     } catch (e) {
-      console.log('无法获取 README:', e)
+      logger.warn('无法获取 README:', e)
     }
     
     // 构建 prompt
@@ -2969,33 +2959,18 @@ summary 要求:
 
     const opts = getAiRequestOptions(apiKey)
     if (!opts) {
-      console.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
-      return null
-    }
-    const response = await fetch(opts.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${opts.apiKey}`
-      },
-      body: JSON.stringify({
-        model: opts.model,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000
-      })
-    })
-    
-    if (!response.ok) {
-      console.error('AI API 错误:', response.status)
+      logger.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
       return null
     }
     
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
+    // 使用重试机制调用 AI API
+    const retryResult = await callAIWithRetry(opts, prompt)
+    if (!retryResult.success) {
+      logger.error('AI API 调用失败:', retryResult.error)
+      return null
+    }
     
+    const content = retryResult.data
     if (!content) {
       return null
     }
@@ -3011,7 +2986,7 @@ summary 要求:
     
     return null
   } catch (error) {
-    console.error('AI 分析错误:', error)
+    logger.error('AI 分析错误:', error)
     return null
   }
 })
@@ -3214,26 +3189,13 @@ ${configTemplate.aiPrompt}
     if (!opts) {
       return { success: false, error: '未配置 AI API（请在设置中填写智谱或自定义大模型）' }
     }
-    const response = await fetch(opts.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${opts.apiKey}`
-      },
-      body: JSON.stringify({
-        model: opts.model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 3000
-      })
-    })
     
-    if (!response.ok) {
-      return { success: false, error: `API 错误: ${response.status}` }
+    const retryResult = await callAIWithRetry(opts, prompt, { maxRetries: 2, max_tokens: 3000 })
+    if (!retryResult.success) {
+      return { success: false, error: retryResult.error || 'AI API 调用失败' }
     }
     
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || ''
+    const content = retryResult.data || ''
     
     // 解析 JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/)
@@ -3308,7 +3270,57 @@ ${config.content}
     
     return { success: true, generated }
   } catch (error) {
-    console.error('生成项目文档失败:', error)
+    logger.error('生成项目文档失败:', error)
+    return { success: false, error: (error as Error).message }
+  }
+})
+
+// 根据一句话想法新建项目：AI 生成英文项目名 + 中文简介，创建空文件夹并返回路径
+ipcMain.handle('ai:createProjectFromIdea', async (_, apiKey: string, idea: string, projectType: string) => {
+  try {
+    const trimmed = (idea || '').trim()
+    if (!trimmed) {
+      return { success: false, error: '请填写一句话描述' }
+    }
+    const opts = getAiRequestOptions(apiKey)
+    if (!opts) {
+      return { success: false, error: '未配置 AI API（请在设置中填写智谱或自定义大模型）' }
+    }
+    const prompt = `用户有一个项目想法，请根据下面这一句话生成：
+1. nameEn：英文项目名，用于文件夹名，仅使用小写字母、数字、连字符，简短（例如 my-awesome-app、tiny-tool）。
+2. introZh：中文项目简介，一两句话概括项目是做什么的。
+
+用户的想法：「${trimmed}」
+
+严格只返回一个 JSON 对象，不要其他文字，格式：{"nameEn":"xxx","introZh":"xxx"}`
+    const retryResult = await callAIWithRetry(opts, prompt, { maxRetries: 2, max_tokens: 500 })
+    if (!retryResult.success) {
+      return { success: false, error: retryResult.error || 'AI 调用失败' }
+    }
+    const content = retryResult.data || ''
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return { success: false, error: '无法解析 AI 返回的 JSON' }
+    }
+    const parsed = JSON.parse(jsonMatch[0])
+    let nameEn = (parsed.nameEn || parsed.name_en || 'new-project').toString()
+    const introZh = (parsed.introZh || parsed.intro_zh || '').toString().trim() || nameEn
+    nameEn = nameEn.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'new-project'
+    const dirs = getProjectTypeDirs()
+    const typeDir = dirs[projectType] || path.join(os.homedir(), 'Workshop', 'Other')
+    if (!fs.existsSync(typeDir)) {
+      fs.mkdirSync(typeDir, { recursive: true })
+    }
+    let targetPath = path.join(typeDir, nameEn)
+    let suffix = 1
+    while (fs.existsSync(targetPath)) {
+      suffix++
+      targetPath = path.join(typeDir, `${nameEn}-${suffix}`)
+    }
+    fs.mkdirSync(targetPath, { recursive: true })
+    return { success: true, path: targetPath, nameEn: path.basename(targetPath), introZh }
+  } catch (error) {
+    logger.error('新建项目失败:', error)
     return { success: false, error: (error as Error).message }
   }
 })
@@ -3415,9 +3427,9 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
   "name": "项目名称（中文，简短易懂）",
   "description": "一句话中文描述（不超过30字）",
   "summary": "详细介绍（2-4段中文，约200-400字）",
-  "projectType": "项目类型：若能明确归入以下之一则填 mcu/ai/software/linux/mobile/remote；若无法归入任何一类则填建议的新类型英文标识，如 game、iot、tool",
+  "projectType": "项目类型：若能明确归入以下之一则填 mcu/ai/software/linux/mobile/remote/fpga；若无法归入任何一类则填建议的新类型英文标识，如 game、iot、tool",
   "suggestedNewTypeName": "当 projectType 为新类型时必填，为该类型的简短中文名，如 游戏、IoT、工具；否则可省略",
-  "confidenceByType": "对象，键为 mcu/ai/software/linux/mobile/remote，值为 0-1 的占比，表示归属到该类型的推荐度，总和为 1。例如 {\"mcu\":0.1,\"ai\":0,\"software\":0.6,\"linux\":0.1,\"mobile\":0.1,\"remote\":0.1}",
+  "confidenceByType": "对象，键为 mcu/ai/software/linux/mobile/remote/fpga，值为 0-1 的占比，表示归属到该类型的推荐度，总和为 1。例如 {\"mcu\":0.1,\"ai\":0,\"software\":0.6,\"linux\":0.1,\"mobile\":0.1,\"remote\":0.1,\"fpga\":0}",
   "chip": "芯片型号，如无则留空",
   "framework": "开发框架",
   "peripherals": ["外设1", "外设2"],
@@ -3432,50 +3444,31 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
 - linux: Linux 平台（驱动、系统移植、RK3588 等）
 - mobile: 移动端（iOS、Android、Flutter、RN 等）
 - remote: 远程设备/DevOps（部署、运维脚本等）
+- fpga: FPGA/数字逻辑（Verilog、VHDL、Xilinx、Intel FPGA、综合与时序等）
 
 分析要点:
 - 若项目明显属于上述某一类，projectType 填该类，confidenceByType 中该类最高。
-- 若项目不属于任何一类（如纯游戏、IoT 产品、独立工具），projectType 填新类型英文标识（小写），suggestedNewTypeName 填中文名，confidenceByType 仍给出对六类的推荐占比供用户参考。
-- confidenceByType 必须包含全部六个键，值均为数字且总和为 1。`
+- 若项目不属于任何一类（如纯游戏、IoT 产品、独立工具），projectType 填新类型英文标识（小写），suggestedNewTypeName 填中文名，confidenceByType 仍给出对七类的推荐占比供用户参考。
+- confidenceByType 必须包含全部七个键（mcu/ai/software/linux/mobile/remote/fpga），值均为数字且总和为 1。`
 
     const opts = getAiRequestOptions(apiKey)
     if (!opts) {
-      console.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
-      return null
-    }
-    const response = await fetch(opts.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${opts.apiKey}`
-      },
-      body: JSON.stringify({
-        model: opts.model,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000
-      })
-    })
-    
-    if (!response.ok) {
-      console.error('AI API 错误:', response.status)
+      logger.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
       return null
     }
     
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content
-    
-    if (!content) {
+    const retryResult = await callAIWithRetry(opts, prompt)
+    if (!retryResult.success || !retryResult.data) {
+      logger.error('AI API 调用失败:', retryResult.error)
       return null
     }
     
+    const content = retryResult.data
     // 解析 JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0])
-      const known = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote']
+      const known = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote', 'fpga']
       if (typeof result.confidenceByType !== 'object') {
         result.confidenceByType = known.reduce((acc, k) => ({ ...acc, [k]: result.projectType === k ? 1 : 0 }), {} as Record<string, number>)
       }
@@ -3487,7 +3480,7 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
     
     return null
   } catch (error) {
-    console.error('AI 本地项目分析错误:', error)
+    logger.error('AI 本地项目分析错误:', error)
     return null
   }
 })

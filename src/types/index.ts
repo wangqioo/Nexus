@@ -256,6 +256,7 @@ export type ProjectType =
   | 'linux'         // Linux 平台项目
   | 'mobile'        // 移动端项目
   | 'remote'        // 远程设备/DevOps
+  | 'fpga'          // FPGA/数字逻辑项目
 
 export interface ProjectTypeConfig {
   id: ProjectType
@@ -290,6 +291,7 @@ export const KNOWLEDGE_CATEGORIES: Record<ProjectType, KnowledgeCategoryDef[]> =
   linux: FIXED_KNOWLEDGE_CATEGORIES,
   mobile: FIXED_KNOWLEDGE_CATEGORIES,
   remote: FIXED_KNOWLEDGE_CATEGORIES,
+  fpga: FIXED_KNOWLEDGE_CATEGORIES,
 }
 
 export const PROJECT_TYPES: ProjectTypeConfig[] = [
@@ -346,6 +348,15 @@ export const PROJECT_TYPES: ProjectTypeConfig[] = [
     description: '远程设备管理和DevOps',
     specificFields: ['host', 'ssh', 'services', 'monitoring'],
     knowledgeCategories: KNOWLEDGE_CATEGORIES.remote,
+  },
+  {
+    id: 'fpga',
+    name: 'FPGA',
+    icon: '🔷',
+    color: '#9254de',
+    description: 'FPGA 与数字逻辑开发',
+    specificFields: ['vendor', 'toolchain', 'language', 'board'],
+    knowledgeCategories: KNOWLEDGE_CATEGORIES.fpga,
   }
 ]
 
@@ -440,6 +451,7 @@ export interface ElectronAPI {
   analyzeGitHubRepo: (url: string, apiKey: string) => Promise<GitHubRepoAnalysis | null>
   analyzeLocalProject: (projectPath: string, apiKey: string) => Promise<LocalProjectAnalysis | null>
   generateProjectDocs: (projectPath: string, apiKey: string) => Promise<{ success: boolean; generated?: { notes: number; snippets: number; configs: number }; error?: string }>
+  createProjectFromIdea: (apiKey: string, idea: string, projectType: string) => Promise<{ success: boolean; path?: string; nameEn?: string; introZh?: string; error?: string }>
   scanDirectory: (dirPath: string) => Promise<{ success: boolean; projects: Array<{ path: string; name: string; hasNexus: boolean; hasReadme: boolean }>; error?: string }>
   // .nexus 项目管理
   initSilProject: (projectPath: string, config: SilProjectConfig) => Promise<boolean>
@@ -552,6 +564,7 @@ export interface LocalProject {
   documentCount: number           // 文档数量
   pendingCount?: number           // 待同步文档数量 (运行时计算)
   lastActivity?: string           // 最后活动时间
+  lastOpenedInCursor?: string     // 最后在 Cursor 中打开的时间（ISO 字符串）
   githubUrl?: string
   status: 'active' | 'archived'
 }
@@ -679,257 +692,11 @@ declare global {
 }
 
 // ============================================================
-// 核心实体：平台 (Platform)
-// 包含框架和芯片的组合，如 "ESP-IDF + ESP32-S3"
+// 已废弃的类型定义已移至 types/deprecated.ts
+// 以下类型不再使用，实际使用：
+// - KnowledgeEntry (替代 CodeSnippet、DebugExperience、ConfigTemplate)
+// - LocalProject (替代 Project)
 // ============================================================
-
-export interface Platform {
-  id: string
-  name: string                    // "ESP32-S3 (ESP-IDF)"
-  
-  // 芯片信息
-  chip: {
-    name: string                  // "ESP32-S3"
-    manufacturer: string          // "Espressif"
-    core: string                  // "Xtensa LX7 Dual-Core"
-    features: string[]            // ["WiFi", "BLE5", "USB-OTG", "AI加速"]
-  }
-  
-  // 框架信息
-  framework: {
-    name: string                  // "ESP-IDF"
-    version?: string              // "5.3"
-    buildSystem: string           // "CMake"
-    configFiles: string[]         // ["sdkconfig", "CMakeLists.txt", "idf_component.yml"]
-  }
-  
-  // 工具链
-  toolchain: {
-    compiler: string              // "xtensa-esp32s3-elf-gcc"
-    initScript?: string           // ". $IDF_PATH/export.sh"
-    buildCommand?: string         // "idf.py build"
-    flashCommand?: string         // "idf.py -p /dev/ttyUSB0 flash"
-  }
-  
-  // 引脚定义 (常用引脚)
-  pinout?: PinDefinition[]
-  
-  notes?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface PinDefinition {
-  pin: string                     // "GPIO11"
-  functions: string[]             // ["I2C_SDA", "SPI_MOSI", "UART_TX"]
-  notes?: string
-}
-
-// ============================================================
-// 外设 (Peripheral)
-// 传感器、显示屏、通信模块等
-// ============================================================
-
-export interface Peripheral {
-  id: string
-  name: string                    // "ST7789 LCD"
-  type: PeripheralType
-  manufacturer?: string           // "Sitronix"
-  
-  // 接口信息
-  interface: {
-    type: InterfaceType           // "spi"
-    speed?: string                // "40MHz"
-    config?: Record<string, any>  // 接口特定配置
-  }
-  
-  // 规格
-  specs?: {
-    [key: string]: string | number // 如 resolution: "240x320", colorDepth: "16bit"
-  }
-  
-  // 默认接线
-  defaultWiring: WiringConfig[]
-  
-  // 关联的代码片段
-  snippetIds: string[]
-  
-  // 数据手册链接
-  datasheet?: string
-  
-  tags: string[]
-  notes?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export type PeripheralType = 
-  | 'display'       // LCD, OLED, 墨水屏, LED矩阵
-  | 'sensor'        // IMU, 温湿度, 光照, 距离
-  | 'audio'         // 麦克风, 扬声器, 编解码器
-  | 'camera'        // 摄像头模块
-  | 'communication' // WiFi模块, BLE模块, LoRa, RS485
-  | 'storage'       // SD卡, Flash, EEPROM
-  | 'actuator'      // 电机, 舵机, 继电器
-  | 'input'         // 按键, 触摸, 编码器
-  | 'power'         // 电源管理, 充电IC
-  | 'other'
-
-export type InterfaceType = 
-  | 'spi' | 'i2c' | 'uart' | 'i2s' 
-  | 'rmt' | 'mipi_dsi' | 'mipi_csi' 
-  | 'sdmmc' | 'usb' | 'gpio' | 'pwm' | 'adc' | 'dac'
-  | 'other'
-
-export interface WiringConfig {
-  peripheralPin: string           // "SCL"
-  mcuPin: string                  // "GPIO11"
-  required: boolean
-  notes?: string
-}
-
-// ============================================================
-// 代码片段 (CodeSnippet)
-// 可复用的代码，关联到平台和外设
-// ============================================================
-
-export interface CodeSnippet {
-  id: string
-  name: string                    // "QMI8658 IMU 初始化"
-  category: SnippetCategory
-  
-  // 关联信息
-  platformIds: string[]           // 适用的平台
-  peripheralIds: string[]         // 相关的外设
-  
-  // 代码内容
-  language: string                // "c", "cpp", "python"
-  code: string
-  
-  // 使用说明
-  description: string
-  usage?: string                  // 如何使用这段代码
-  dependencies?: string[]         // 依赖的库或组件
-  
-  // 来源
-  sourceProject?: string          // 来自哪个项目
-  sourceFile?: string             // 原始文件路径
-  
-  tags: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-export type SnippetCategory = 
-  | 'driver'        // 外设驱动代码
-  | 'init'          // 初始化代码 (GPIO, 时钟, 外设)
-  | 'algorithm'     // 算法代码 (滤波, 效果, 计算)
-  | 'config'        // 配置代码 (WiFi, NVS, 休眠)
-  | 'protocol'      // 通信协议 (I2C读写, SPI传输)
-  | 'middleware'    // 中间件 (LVGL集成, 音频处理)
-  | 'utility'       // 工具函数 (日志, 调试, 转换)
-  | 'template'      // 模板代码 (main函数, 任务框架)
-
-// ============================================================
-// 调试经验 (DebugExperience)
-// 问题-环境-根因-解决方案
-// ============================================================
-
-export interface DebugExperience {
-  id: string
-  title: string                   // 简短描述问题
-  
-  // 环境信息 (关键!)
-  environment: {
-    platformId?: string           // 关联的平台
-    peripheralIds?: string[]      // 涉及的外设
-    frameworkVersion?: string     // 框架版本
-    sdkVersion?: string           // SDK版本
-    customEnv?: Record<string, string>  // 其他环境信息
-  }
-  
-  // 问题描述
-  symptom: string                 // 现象：发生了什么
-  errorLog?: string               // 错误日志/输出
-  
-  // 分析
-  rootCause: string               // 根因：为什么会发生
-  
-  // 解决方案
-  solution: string                // 如何解决
-  solutionCode?: string           // 修复代码
-  
-  // 关联
-  relatedSnippetIds?: string[]    // 相关的代码片段
-  
-  // 重要程度
-  severity: 'critical' | 'major' | 'minor' | 'trivial'
-  
-  tags: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-// ============================================================
-// 配置模板 (ConfigTemplate)
-// sdkconfig, CMakeLists, Kconfig, platformio.ini 等
-// ============================================================
-
-export interface ConfigTemplate {
-  id: string
-  name: string                    // "ESP32-S3 + ST7789 SPI显示"
-  description: string
-  
-  // 适用范围
-  platformId: string              // 关联的平台
-  peripheralIds?: string[]        // 配置针对哪些外设
-  
-  // 配置文件
-  files: ConfigFile[]
-  
-  // 来源
-  sourceProject?: string
-  
-  tags: string[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ConfigFile {
-  filename: string                // "sdkconfig.defaults"
-  path?: string                   // "相对路径，如 main/"
-  content: string
-  description?: string
-}
-
-// ============================================================
-// 项目 (Project)
-// 一个完整的 MCU 项目，关联所有资源
-// ============================================================
-
-export interface Project {
-  id: string
-  name: string
-  description: string
-  
-  // 关联
-  platformId: string
-  peripheralIds: string[]
-  configTemplateId?: string
-  
-  // 项目路径 (本地)
-  localPath?: string
-  
-  // 状态
-  status: 'active' | 'completed' | 'archived'
-  
-  // 笔记
-  notes?: string
-  
-  tags: string[]
-  createdAt: string
-  updatedAt: string
-}
 
 // ============================================================
 // 笔记 (Note)
@@ -972,7 +739,7 @@ export interface Note {
 // ============================================================
 
 export interface SearchResult {
-  type: 'platform' | 'peripheral' | 'snippet' | 'debug' | 'config' | 'project' | 'note'
+  type: 'knowledge' | 'note' | 'project'  // 简化类型：knowledge 包含所有知识库类型（debug/snippet/config等）
   id: string
   title: string
   subtitle?: string

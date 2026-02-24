@@ -29,46 +29,14 @@ export function useSearch() {
       keys: ['title', 'content', 'tags', 'category']
     })
 
-    // 分类到 SearchResult type 的映射（覆盖所有项目类型的分类）
-    const typeMap: Record<string, SearchResult['type']> = {
-      // MCU 类型
-      platform: 'platform',
-      peripheral: 'peripheral',
-      snippet: 'snippet',
-      debug: 'debug',
-      config: 'config',
-      // AI 类型
-      model: 'config',
-      training: 'debug',
-      inference: 'snippet',
-      dataset: 'config',
-      prompt: 'snippet',
-      // Software 类型
-      architecture: 'platform',
-      api: 'snippet',
-      database: 'config',
-      deployment: 'config',
-      // Linux 类型
-      system: 'platform',
-      driver: 'peripheral',
-      network: 'config',
-      'cross-compile': 'config',
-      // Mobile 类型
-      ui: 'snippet',
-      native: 'peripheral',
-      performance: 'debug',
-      // Remote 类型
-      connection: 'config',
-      monitoring: 'debug',
-    }
-
+    // 知识库条目统一映射为 'knowledge' 类型
     knowledgeFuse.search(query).forEach(result => {
       const item = result.item as KnowledgeEntry
       const cats = KNOWLEDGE_CATEGORIES[item.projectType] || []
       const catName = cats.find(c => c.id === item.category)?.name || item.category
 
       results.push({
-        type: typeMap[item.category] || 'platform',
+        type: 'knowledge',
         id: item.id,
         title: item.title,
         subtitle: catName,

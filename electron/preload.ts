@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ai:analyzeLocalProject', projectPath, apiKey),
   generateProjectDocs: (projectPath: string, apiKey: string) =>
     ipcRenderer.invoke('ai:generateProjectDocs', projectPath, apiKey),
+  createProjectFromIdea: (apiKey: string, idea: string, projectType: string) =>
+    ipcRenderer.invoke('ai:createProjectFromIdea', apiKey, idea, projectType),
   scanDirectory: (dirPath: string) =>
     ipcRenderer.invoke('project:scanDirectory', dirPath),
   

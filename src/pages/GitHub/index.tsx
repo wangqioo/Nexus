@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons'
 import type { GitHubRepo, GitHubCategory, GitStatusResult } from '../../types'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { logger } from '../../utils/logger'
 import styles from './GitHub.module.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -106,7 +107,7 @@ export function GitHub() {
         checkAllReposStatus(config.repos || [])
       }
     } catch (error) {
-      console.error('Failed to load repos config:', error)
+      logger.error('Failed to load repos config:', error)
       message.error('加载仓库配置失败')
     }
     setLoading(false)
@@ -265,7 +266,7 @@ export function GitHub() {
       
       return success
     } catch (error) {
-      console.error('Failed to save repos config:', error)
+      logger.error('Failed to save repos config:', error)
       return false
     }
   }
@@ -376,7 +377,7 @@ export function GitHub() {
         message.error({ content: '分析失败，请检查 URL 或 API Key', key: 'analyze' })
       }
     } catch (error) {
-      console.error('AI 分析错误:', error)
+      logger.error('AI 分析错误:', error)
       message.error({ content: '分析失败', key: 'analyze' })
     }
     
@@ -429,7 +430,7 @@ export function GitHub() {
         message.error('保存失败')
       }
     } catch (error) {
-      console.error('Validation failed:', error)
+      logger.error('Validation failed:', error)
     }
   }
 

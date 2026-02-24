@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons'
 import type { NexusTemplateConfig, DocumentTemplate, TemplateField, TemplateVersionRecord, ProjectTemplateUsage } from '../../types'
 import { DEFAULT_TEMPLATE_CONFIG } from '../../types'
+import { logger } from '../../utils/logger'
 import styles from './Settings.module.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -291,7 +292,7 @@ export function Settings() {
       const cfg = await window.electronAPI.getTemplateConfig()
       setConfig(cfg)
     } catch (e) {
-      console.error('加载模板配置失败:', e)
+      logger.error('加载模板配置失败:', e)
       message.error('加载配置失败')
     }
     setLoading(false)
@@ -307,7 +308,7 @@ export function Settings() {
         message.error('保存失败')
       }
     } catch (e) {
-      console.error('保存模板配置错误:', e)
+      logger.error('保存模板配置错误:', e)
       message.error('保存失败')
     }
     setSaving(false)
@@ -320,7 +321,7 @@ export function Settings() {
       setConfig(defaultConfig)
       message.success('已恢复默认配置')
     } catch (e) {
-      console.error('重置模板配置错误:', e)
+      logger.error('重置模板配置错误:', e)
       message.error('重置失败')
     }
     setLoading(false)

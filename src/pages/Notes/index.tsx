@@ -15,6 +15,7 @@ import { storage } from '../../services/storage'
 import type { Note, ProjectType } from '../../types'
 import { NOTE_CATEGORIES, PROJECT_TYPES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
+import { logger } from '../../utils/logger'
 import styles from './Notes.module.css'
 
 const { Title, Text } = Typography
@@ -90,7 +91,7 @@ export function Notes() {
       const noteList = await storage.listNotes()
       setNotes(noteList)
     } catch (e) {
-      console.error('Failed to load notes:', e)
+      logger.error('Failed to load notes:', e)
     }
     setLoading(false)
   }

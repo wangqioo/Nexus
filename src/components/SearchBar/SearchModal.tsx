@@ -16,13 +16,10 @@ interface SearchModalProps {
   onClose: () => void
 }
 
-const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string; route: string }> = {
-  platform: { icon: <CloudServerOutlined />, color: 'blue', label: '平台', route: '/knowledge' },
-  peripheral: { icon: <UsbOutlined />, color: 'cyan', label: '外设', route: '/knowledge' },
-  snippet: { icon: <CodeOutlined />, color: 'green', label: '代码', route: '/knowledge' },
-  debug: { icon: <BugOutlined />, color: 'red', label: '调试', route: '/knowledge' },
-  config: { icon: <SettingOutlined />, color: 'orange', label: '配置', route: '/knowledge' },
+const typeConfig: Record<SearchResult['type'], { icon: React.ReactNode; color: string; label: string; route: string }> = {
+  knowledge: { icon: <CodeOutlined />, color: 'blue', label: '知识库', route: '/knowledge' },
   note: { icon: <FileTextOutlined />, color: 'purple', label: '笔记', route: '/notes' },
+  project: { icon: <CloudServerOutlined />, color: 'green', label: '项目', route: '/projects' },
 }
 
 export function SearchModal({ open, onClose }: SearchModalProps) {

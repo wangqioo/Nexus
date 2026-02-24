@@ -37,7 +37,9 @@ const formatRelativeTime = (dateStr?: string) => {
 import { getProjectTypeIcon } from '../../components/Icons'
 import { useSync } from '../../contexts/SyncContext'
 import { storage } from '../../services/storage'
+import { cleanupProjectData } from '../../services/project-cleanup'
 import type { KnowledgeEntry, Note } from '../../types'
+import { logger } from '../../utils/logger'
 import styles from './Projects.module.css'
 
 const { Title, Text, Paragraph } = Typography
@@ -80,7 +82,7 @@ export function Projects() {
   
   // 模态框状态
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [importMode, setImportMode] = useState<'local' | 'github' | 'batch'>('local')
+  const [importMode, setImportMode] = useState<'new' | 'local' | 'github' | 'batch'>('new')
   const [initModalOpen, setInitModalOpen] = useState(false)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [importForm] = Form.useForm()
@@ -101,6 +103,8 @@ export function Projects() {
   const [analyzing, setAnalyzing] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [countdown, setCountdown] = useState(0)
+  // 新建项目（从一句话生成）loading
+  const [newProjectCreating, setNewProjectCreating] = useState(false)
   
   // 导入成功弹窗状态
   const [importSuccessOpen, setImportSuccessOpen] = useState(false)
@@ -222,7 +226,7 @@ export function Projects() {
             content: `检测到 ${pathChanges.length} 个项目路径变化，已自动更新`,
             duration: 5
           })
-          console.log('[Nexus] 项目路径变化:', pathChanges)
+          logger.info('项目路径变化:', pathChanges)
         }
         
         // 先立即显示项目列表（使用缓存的状态）
@@ -235,63 +239,61 @@ export function Projects() {
         setLoading(false)
       }
     } catch (error) {
-      console.error('Failed to load projects:', error)
+      logger.error('Failed to load projects:', error)
       setLoading(false)
     }
   }
 
   // 后台异步检查项目状态（只检查当前页，减少不必要的 API 调用）
+  // 批量更新：所有项目检查完后再 setProjects 一次，避免搜索时循环 setState 导致卡死
   const checkProjectsStatusAsync = async (projectList: LocalProject[], checkAll = false) => {
-    // 如果不是检查全部，只检查前 pageSize 个项目（首页）
     const projectsToCheck = checkAll ? projectList : projectList.slice(0, pageSize)
-    
+    const updates = new Map<string, Partial<LocalProject>>()
     for (const project of projectsToCheck) {
       try {
         const silExists = await window.electronAPI.projectPathExists(
           `${project.path}/.nexus/project.yaml`
         )
-        
         let documentCount = project.documentCount || 0
         let pendingCount = 0
-        
         if (silExists) {
           const silData = await window.electronAPI.scanSilProject(project.path)
           documentCount = silData?.documents?.length || 0
-          
           const pendingResult = await window.electronAPI.checkPendingSync(project.path, project.projectType)
           pendingCount = pendingResult.pendingCount
         }
-        
         const lastActivity = await window.electronAPI.getProjectLastModified(project.path)
-        
-        // 逐个更新项目状态
-        setProjects(prev => prev.map(p => 
-          p.id === project.id ? {
-            ...p,
-            hasSil: silExists,
-            documentCount,
-            pendingCount,
-            lastActivity: lastActivity || p.lastActivity,
-          } : p
-        ))
+        updates.set(project.id, {
+          hasSil: silExists,
+          documentCount,
+          pendingCount,
+          lastActivity: lastActivity || project.lastActivity,
+        })
       } catch (e) {
         // 忽略单个项目的错误
       }
     }
+    if (updates.size > 0) {
+      setProjects(prev => prev.map(p =>
+        updates.has(p.id) ? { ...p, ...updates.get(p.id) } : p
+      ))
+    }
   }
   
-  // 当翻页时，检查新页面的项目状态
+  // 当翻页或列表就绪时，检查当前页项目状态（防抖：搜索输入时不立刻触发，避免卡顿）
   useEffect(() => {
     if (!loading && filteredProjects.length > 0) {
-      const startIndex = (currentPage - 1) * pageSize
-      const currentPageProjects = filteredProjects.slice(startIndex, startIndex + pageSize)
-      // 检查当前页中还没有状态的项目
-      const projectsNeedCheck = currentPageProjects.filter(p => p.lastActivity === undefined)
-      if (projectsNeedCheck.length > 0) {
-        checkProjectsStatusAsync(projectsNeedCheck, true)
-      }
+      const timer = setTimeout(() => {
+        const startIndex = (currentPage - 1) * pageSize
+        const currentPageProjects = filteredProjects.slice(startIndex, startIndex + pageSize)
+        const projectsNeedCheck = currentPageProjects.filter(p => p.lastActivity === undefined)
+        if (projectsNeedCheck.length > 0) {
+          checkProjectsStatusAsync(projectsNeedCheck, true)
+        }
+      }, 300)
+      return () => clearTimeout(timer)
     }
-  }, [currentPage, pageSize, filteredProjects.length])
+  }, [currentPage, pageSize, filteredProjects.length, loading])
 
   // 同步版本（用于刷新按钮等需要等待的场景）
   const checkProjectsStatus = async (projectList: LocalProject[]) => {
@@ -327,8 +329,39 @@ export function Projects() {
   }
 
   const filterProjects = () => {
-    // 反转数组，让最新添加的项目显示在前面
-    let filtered = [...projects].reverse()
+    // 排序逻辑：
+    // 1. 优先显示最近在 Cursor 打开的项目（按 lastOpenedInCursor 降序）
+    // 2. 然后显示最新导入的项目（数组顺序：最早导入在前，最新导入在后，需要反转）
+    let filtered = [...projects]
+    
+    // 创建索引映射，用于保持未打开项目的导入顺序
+    const indexMap = new Map(projects.map((p, idx) => [p.id, idx]))
+    
+    // 排序：有 lastOpenedInCursor 的优先，然后按时间降序；没有的按导入顺序（索引降序，即最新导入在前）
+    filtered.sort((a, b) => {
+      const aHasOpened = !!a.lastOpenedInCursor
+      const bHasOpened = !!b.lastOpenedInCursor
+      
+      // 如果都有打开记录，按打开时间降序（最近打开的在前）
+      if (aHasOpened && bHasOpened) {
+        return new Date(b.lastOpenedInCursor!).getTime() - new Date(a.lastOpenedInCursor!).getTime()
+      }
+      
+      // 如果只有 a 有打开记录，a 排在前面
+      if (aHasOpened && !bHasOpened) {
+        return -1
+      }
+      
+      // 如果只有 b 有打开记录，b 排在前面
+      if (!aHasOpened && bHasOpened) {
+        return 1
+      }
+      
+      // 都没有打开记录，按导入顺序降序（索引大的在前，即最新导入的在前）
+      const aIndex = indexMap.get(a.id) ?? 0
+      const bIndex = indexMap.get(b.id) ?? 0
+      return bIndex - aIndex
+    })
     
     // 按类型筛选
     if (selectedType !== 'all') {
@@ -371,17 +404,19 @@ export function Projects() {
 
   const saveProjects = async (newProjects: LocalProject[]) => {
     try {
-      const content = JSON.stringify({ projects: newProjects }, null, 2)
+      // 不持久化 pendingCount（运行时检查结果），避免再次打开面板时误显示「待同步」角标
+      const toSave = newProjects.map(p => ({ ...p, pendingCount: undefined }))
+      const content = JSON.stringify({ projects: toSave }, null, 2)
       await window.electronAPI.writeFile(LOCAL_PROJECTS_FILE, content)
       return true
     } catch (error) {
-      console.error('Failed to save projects:', error)
+      logger.error('Failed to save projects:', error)
       return false
     }
   }
 
   // 添加项目
-  const handleOpenImport = (mode: 'local' | 'github' | 'batch' = 'local') => {
+  const handleOpenImport = (mode: 'new' | 'local' | 'github' | 'batch' = 'new') => {
     importForm.resetFields()
     setImportMode(mode)
     setBatchScanDir('')
@@ -458,7 +493,7 @@ export function Projects() {
         message.error({ content: '分析失败，请检查 API Key', key: 'analyze' })
       }
     } catch (error) {
-      console.error('AI 分析错误:', error)
+      logger.error('AI 分析错误:', error)
       message.error({ content: '分析失败', key: 'analyze' })
     }
     
@@ -553,7 +588,7 @@ export function Projects() {
         setImportSuccessOpen(true)
       }
     } catch (error) {
-      console.error('保存失败:', error)
+      logger.error('保存失败:', error)
       message.error({ content: '保存失败', key: 'save' })
     }
   }
@@ -794,12 +829,74 @@ export function Projects() {
       setImportedProject(newProject)
       setImportSuccessOpen(true)
     } catch (error) {
-      console.error('GitHub 导入失败:', error)
+      logger.error('GitHub 导入失败:', error)
       message.error('导入失败')
     } finally {
       setCloning(false)
       setCloneProgress(0)
       setCloneSpeed('')
+    }
+  }
+
+  // 新建项目：一句话描述 → AI 生成英文名 + 中文简介 → 创建空文件夹并加入列表
+  const handleCreateNewProject = async () => {
+    try {
+      const values = await importForm.validateFields(['newIdea', 'newProjectType'])
+      const idea = (values.newIdea || '').trim()
+      const projectType = values.newProjectType || 'software'
+      if (!idea) {
+        message.warning('请填写一句话描述')
+        return
+      }
+      let key = apiKey || localStorage.getItem('zhipu_api_key') || ''
+      if (!key) {
+        try {
+          const cfg = await window.electronAPI.readFile('config.json')
+          if (cfg) {
+            const config = JSON.parse(cfg)
+            key = config.zhipu_api_key || ''
+          }
+        } catch (_) {}
+      }
+      if (!key) {
+        message.warning('请先在导入弹窗下方或设置 → 大模型 API 中配置 API Key')
+        return
+      }
+      setNewProjectCreating(true)
+      const result = await window.electronAPI.createProjectFromIdea(key, idea, projectType)
+      if (!result.success || !result.path) {
+        message.error(result.error || '创建失败')
+        return
+      }
+      if (projects.some(p => p.path === result.path)) {
+        message.info('该项目已存在列表中')
+        setImportModalOpen(false)
+        return
+      }
+      const newProject: LocalProject = {
+        id: Date.now().toString(),
+        name: result.introZh || result.nameEn || result.path.split('/').filter(Boolean).pop() || '新项目',
+        path: result.path,
+        description: result.introZh || '',
+        projectType,
+        tags: [],
+        hasSil: false,
+        documentCount: 0,
+        status: 'active',
+      }
+      const newProjects = [...projects, newProject]
+      await saveProjects(newProjects)
+      setProjects(newProjects)
+      setImportModalOpen(false)
+      importForm.resetFields()
+      message.success(`已创建空项目：${result.nameEn}，项目概览可稍后在卡片上「AI 分析」生成`)
+      setSelectedProject(newProject)
+      setDetailDrawerOpen(true)
+    } catch (e: any) {
+      if (e?.errorFields) return
+      message.error(e?.message || '创建失败')
+    } finally {
+      setNewProjectCreating(false)
     }
   }
 
@@ -857,7 +954,7 @@ export function Projects() {
         }
       }
     } catch (error) {
-      console.error('Validation failed:', error)
+      logger.error('Validation failed:', error)
     }
   }
 
@@ -937,7 +1034,7 @@ export function Projects() {
         message.error('初始化失败')
       }
     } catch (error) {
-      console.error('Init failed:', error)
+      logger.error('Init failed:', error)
     }
   }
 
@@ -1245,7 +1342,17 @@ export function Projects() {
     const success = await window.electronAPI.openInCursor(project.path)
     if (!success) {
       message.error('打开失败，请确保已安装 Cursor')
+      return
     }
+    
+    // 记录打开时间并更新项目数据
+    const updatedProjects = projects.map(p => 
+      p.id === project.id 
+        ? { ...p, lastOpenedInCursor: new Date().toISOString() }
+        : p
+    )
+    setProjects(updatedProjects)
+    await saveProjects(updatedProjects)
   }
 
   const handleOpenInFinder = async (project: LocalProject) => {
@@ -1259,6 +1366,12 @@ export function Projects() {
   // 删除项目（真正删除本地文件）
   const handleDeleteProject = async (project: LocalProject) => {
     message.loading({ content: '正在删除项目...', key: 'delete', duration: 0 })
+    
+    // 先清理关联的知识库条目和笔记
+    const cleanupResult = await cleanupProjectData(project.path, project.name)
+    if (cleanupResult.errors.length > 0) {
+      logger.warn('清理项目数据时出现错误:', cleanupResult.errors)
+    }
     
     // 删除本地文件夹（移动到废纸篓）
     const deleteResult = await window.electronAPI.deleteProjectDir(project.path)
@@ -1274,7 +1387,14 @@ export function Projects() {
     
     if (saved) {
       setProjects(newProjects)
-      message.success({ content: '项目已删除（已移动到废纸篓）', key: 'delete' })
+      const cleanupMsg = cleanupResult.deletedKnowledge > 0 || cleanupResult.deletedNotes > 0
+        ? `，已清理 ${cleanupResult.deletedKnowledge} 条知识、${cleanupResult.deletedNotes} 条笔记`
+        : ''
+      message.success({ 
+        content: `项目已删除（已移动到废纸篓）${cleanupMsg}`, 
+        key: 'delete',
+        duration: 5
+      })
     }
   }
 
@@ -1352,7 +1472,7 @@ export function Projects() {
     try {
       await window.electronAPI.clearKnowledgeBase()
     } catch (e) {
-      console.error('清理知识库失败:', e)
+      logger.error('清理知识库失败:', e)
     }
     
     const updatedProjects = [...projects]
@@ -1447,7 +1567,7 @@ export function Projects() {
           try {
             await window.electronAPI.syncFromProject(finalPath, apiKey, newProject.projectType)
           } catch (syncErr) {
-            console.error(`[Sync] ${proj.name} 同步失败:`, syncErr)
+            logger.error(`[Sync] ${proj.name} 同步失败:`, syncErr)
           }
         }
         
@@ -1456,7 +1576,7 @@ export function Projects() {
         await new Promise(resolve => setTimeout(resolve, 800))
         
       } catch (e) {
-        console.error(`导入 ${proj.name} 失败:`, e)
+        logger.error(`导入 ${proj.name} 失败:`, e)
         errors++
       }
     }
@@ -1524,9 +1644,10 @@ export function Projects() {
           <Dropdown
             menu={{
               items: [
+                { key: 'new', icon: <PlusOutlined />, label: '新建项目', onClick: () => handleOpenImport('new') },
+                { type: 'divider' },
                 { key: 'local', icon: <FolderAddOutlined />, label: '本地项目', onClick: () => handleOpenImport('local') },
                 { key: 'github', icon: <GithubOutlined />, label: 'GitHub 项目', onClick: () => handleOpenImport('github') },
-                { type: 'divider' },
                 { key: 'batch', icon: <ImportOutlined />, label: '批量扫描导入', onClick: () => handleOpenImport('batch') },
               ],
             }}
@@ -1616,14 +1737,14 @@ export function Projects() {
                   <Tooltip title="在 Finder 打开" key="finder">
                     <FolderOpenOutlined onClick={() => handleOpenInFinder(project)} />
                   </Tooltip>,
-                  <Tooltip title={project.pendingCount ? `${project.pendingCount} 条新经验待同步` : "一键导入经验"} key="sync">
-                    <Badge count={project.pendingCount || 0} size="small" offset={[-2, 2]}>
+                  <Tooltip title={(typeof project.pendingCount === 'number' && project.pendingCount > 0) ? `${project.pendingCount} 条新经验待同步` : '一键导入经验'} key="sync">
+                    <Badge count={typeof project.pendingCount === 'number' && project.pendingCount > 0 ? project.pendingCount : 0} size="small" offset={[-2, 2]}>
                       <SyncOutlined
                         onClick={() => handleSyncProject(project)}
                         style={{ 
                           opacity: project.hasSil ? 1 : 0.3, 
-                          color: project.pendingCount ? '#52c41a' : (project.hasSil ? '#4096ff' : undefined),
-                          animation: project.pendingCount ? 'pulse 2s infinite' : undefined
+                          color: (typeof project.pendingCount === 'number' && project.pendingCount > 0) ? '#52c41a' : (project.hasSil ? '#4096ff' : undefined),
+                          animation: (typeof project.pendingCount === 'number' && project.pendingCount > 0) ? 'pulse 2s infinite' : undefined
                         }}
                       />
                     </Badge>
@@ -1774,27 +1895,30 @@ export function Projects() {
       <Modal
         title={
           <Space>
-            {importMode === 'github' ? <GithubOutlined /> : importMode === 'batch' ? <ImportOutlined /> : <FolderAddOutlined />}
-            <span>导入项目</span>
+            {importMode === 'new' ? <PlusOutlined /> : importMode === 'github' ? <GithubOutlined /> : importMode === 'batch' ? <ImportOutlined /> : <FolderAddOutlined />}
+            <span>{importMode === 'new' ? '新建项目' : '导入项目'}</span>
           </Space>
         }
         open={importModalOpen}
         onCancel={() => { setImportModalOpen(false); setCountdown(0) }}
         onOk={
-          importMode === 'github' ? handleGithubImport
+          importMode === 'new' ? handleCreateNewProject
+            : importMode === 'github' ? handleGithubImport
             : importMode === 'batch' ? handleBatchExecute
             : handleSaveProject
         }
         okText={
-          importMode === 'github'
+          importMode === 'new'
+            ? (newProjectCreating ? '创建中...' : 'AI 生成并创建')
+            : importMode === 'github'
             ? (cloning ? '导入中...' : 'AI 分析并导入')
             : importMode === 'batch'
             ? `开始导入 (${batchNewProjects.length} 个)`
             : (countdown > 0 ? `${countdown}s 后添加` : '添加')
         }
         okButtonProps={{
-          loading: importMode === 'github' ? cloning : false,
-          icon: <ThunderboltOutlined />,
+          loading: importMode === 'new' ? newProjectCreating : importMode === 'github' ? cloning : false,
+          icon: importMode === 'new' ? <PlusOutlined /> : <ThunderboltOutlined />,
           disabled: importMode === 'batch' && batchNewProjects.length === 0,
           style: importMode === 'local' ? { display: 'none' } : undefined,
         }}
@@ -1806,13 +1930,14 @@ export function Projects() {
           block
           value={importMode}
           onChange={(val) => {
-            setImportMode(val as 'local' | 'github' | 'batch')
+            setImportMode(val as 'new' | 'local' | 'github' | 'batch')
             importForm.resetFields()
             setCountdown(0)
             setBatchScanDir('')
             setBatchNewProjects([])
           }}
           options={[
+            { value: 'new', icon: <PlusOutlined />, label: '新建项目' },
             { value: 'local', icon: <FolderAddOutlined />, label: '本地项目' },
             { value: 'github', icon: <GithubOutlined />, label: 'GitHub' },
             { value: 'batch', icon: <ImportOutlined />, label: '批量扫描' },
@@ -1821,7 +1946,9 @@ export function Projects() {
         />
 
         <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          {importMode === 'local'
+          {importMode === 'new'
+            ? '用一句话描述你的想法，AI 会生成英文项目名和中文简介，并在对应分类下创建空文件夹。项目概览可稍后在项目卡片上「AI 分析」生成。'
+            : importMode === 'local'
             ? '选择本地项目文件夹，AI 自动分析并归档到对应分类目录。'
             : importMode === 'github'
             ? '输入 GitHub 仓库地址，自动克隆到本地并进行 AI 分析。'
@@ -1829,6 +1956,34 @@ export function Projects() {
         </Paragraph>
 
         <Form form={importForm} layout="vertical">
+          {/* ---- 新建项目：一句话 + 分类 ---- */}
+          {importMode === 'new' && (
+            <>
+              <Form.Item
+                name="newProjectType"
+                label="项目分类"
+                initialValue="software"
+                rules={[{ required: true, message: '请选择分类' }]}
+              >
+                <Select
+                  options={PROJECT_TYPES.map(t => ({ value: t.id, label: `${t.icon} ${t.name}` }))}
+                  placeholder="选择存放目录（如 AI、MCU、Software）"
+                />
+              </Form.Item>
+              <Form.Item
+                name="newIdea"
+                label="一句话描述"
+                rules={[{ required: true, message: '请填写你的想法' }, { max: 500, message: '最多 500 字' }]}
+              >
+                <Input.TextArea
+                  rows={3}
+                  placeholder="例如：做一个用 ESP32 控制 WS2812 的呼吸灯小工具"
+                  showCount
+                  maxLength={500}
+                />
+              </Form.Item>
+            </>
+          )}
           {/* ---- 本地模式：选择文件夹 ---- */}
           {importMode === 'local' && (
             <>
@@ -2046,6 +2201,7 @@ export function Projects() {
         <div className={styles.modalTipBox}>
           <Text type="secondary" style={{ fontSize: 12 }}>
             <strong>流程：</strong>
+            {importMode === 'new' && '一句话描述 → AI 生成英文名与中文简介 → 在分类目录下创建空文件夹'}
             {importMode === 'local' && '选择文件夹 → AI 分析类型 → 移动到分类目录 → 初始化 .nexus'}
             {importMode === 'github' && (
               <>
@@ -2162,11 +2318,27 @@ export function Projects() {
                         
                         {/* 详细介绍 */}
                         {selectedProject.summary ? (
-                          <div className={styles.detailInfoCard}>
-                            <Text style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
-                              {selectedProject.summary}
-                            </Text>
-                          </div>
+                          <>
+                            <div className={styles.detailInfoCard}>
+                              <Text style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+                                {selectedProject.summary}
+                              </Text>
+                            </div>
+                            <div style={{ marginTop: 12, marginBottom: 16 }}>
+                              <Button
+                                type="default"
+                                size="small"
+                                icon={<ThunderboltOutlined />}
+                                loading={generatingSummaryForId === selectedProject?.id}
+                                onClick={handleGenerateSummary}
+                              >
+                                在此更新项目概览
+                              </Button>
+                              <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                                开发过程中可随时用 AI 重新分析并更新
+                              </Text>
+                            </div>
+                          </>
                         ) : (
                           <Empty 
                             description="暂无项目介绍" 
@@ -2551,8 +2723,18 @@ export function Projects() {
               <Button 
                 type="primary" 
                 icon={<CodeOutlined />}
-                onClick={() => {
-                  window.electronAPI.openInCursor(importedProject.path)
+                onClick={async () => {
+                  const success = await window.electronAPI.openInCursor(importedProject.path)
+                  if (success) {
+                    // 记录打开时间并更新项目数据
+                    const updatedProjects = projects.map(p => 
+                      p.id === importedProject.id 
+                        ? { ...p, lastOpenedInCursor: new Date().toISOString() }
+                        : p
+                    )
+                    setProjects(updatedProjects)
+                    await saveProjects(updatedProjects)
+                  }
                   setImportSuccessOpen(false)
                 }}
               >

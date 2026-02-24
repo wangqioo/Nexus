@@ -10,6 +10,8 @@ import type { KnowledgeEntry, LocalProject, ProjectType } from '../../types'
 import { PROJECT_TYPES, KNOWLEDGE_CATEGORIES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
 import { useSync } from '../../contexts/SyncContext'
+import { logger } from '../../utils/logger'
+import { processBatch, yieldToUI } from '../../utils/batch-sync'
 import styles from './Dashboard.module.css'
 
 const { Title, Text } = Typography
@@ -117,75 +119,105 @@ export function Dashboard() {
       } catch {}
     }
 
+    // 启动进度条
+    startSync(`准备同步 ${pendingProjects.length} 个项目`, pendingProjects.length, true)
+    
     let synced = 0
     let errors = 0
+    let cancelled = false
 
-    for (let i = 0; i < pendingProjects.length; i++) {
-      const project = pendingProjects[i]
-      
-      // 第一个项目时才启动进度条
-      if (i === 0) {
-        startSync(`正在同步: ${project.name}`, pendingProjects.length, true)
-      }
+    try {
+      // 使用分批处理，避免阻塞 UI
+      await processBatch(
+        pendingProjects,
+        async (project, index) => {
+          // 检查是否被取消
+          if (isCancelled()) {
+            cancelled = true
+            throw new Error('CANCELLED')
+          }
+          
+          // 更新双进度条
+          updateBatchProgress({
+            totalStep: `正在同步: ${project.name}`,
+            totalCurrent: index,
+            totalCount: pendingProjects.length,
+            currentStep: '连接中...',
+            currentFile: `共 ${project.pendingCount} 条文档`,
+            currentProgress: 0
+          })
 
-      // 检查是否被取消
-      if (isCancelled()) {
+          try {
+            await window.electronAPI?.syncFromProject(project.path, apiKey, project.projectType)
+            synced++
+            
+            // 更新当前项目完成
+            updateBatchProgress({
+              totalStep: `✓ 完成: ${project.name}`,
+              totalCurrent: index + 1,
+              totalCount: pendingProjects.length,
+              currentStep: '同步成功',
+              currentFile: '',
+              currentProgress: 100
+            })
+            
+            return { success: true, project }
+          } catch (e: any) {
+            if (e?.message === 'CANCELLED') {
+              throw e
+            }
+            logger.error(`同步 ${project.name} 失败:`, e)
+            errors++
+            
+            updateBatchProgress({
+              totalStep: `✗ 失败: ${project.name}`,
+              totalCurrent: index + 1,
+              totalCount: pendingProjects.length,
+              currentStep: '同步失败',
+              currentFile: String(e),
+              currentProgress: 100
+            })
+            
+            return { success: false, project, error: e }
+          }
+        },
+        {
+          batchSize: 3,              // 每批处理 3 个项目
+          delayBetweenBatches: 100,  // 批次间延迟 100ms
+          delayBetweenItems: 300,    // 项目间延迟 300ms（API 限速）
+        },
+        (current, total, project) => {
+          // 进度回调
+          if (current === 0) {
+            updateBatchProgress({
+              totalStep: `准备同步: ${project.name}`,
+              totalCurrent: 0,
+              totalCount: total,
+              currentStep: '初始化...',
+              currentFile: '',
+              currentProgress: 0
+            })
+          }
+        }
+      )
+    } catch (e: any) {
+      if (e?.message === 'CANCELLED' || cancelled) {
         updateBatchProgress({
           totalStep: `已取消 (完成 ${synced}/${pendingProjects.length})`,
-          totalCurrent: i,
+          totalCurrent: synced,
           totalCount: pendingProjects.length,
           currentStep: '同步已终止',
           currentFile: '',
           currentProgress: 100
         })
-        break
-      }
-      
-      // 更新双进度条
-      updateBatchProgress({
-        totalStep: `正在同步: ${project.name}`,
-        totalCurrent: i,
-        totalCount: pendingProjects.length,
-        currentStep: '连接中...',
-        currentFile: `共 ${project.pendingCount} 条文档`,
-        currentProgress: 0
-      })
-
-      try {
-        await window.electronAPI?.syncFromProject(project.path, apiKey, project.projectType)
-        synced++
-        
-        // 更新当前项目完成
-        updateBatchProgress({
-          totalStep: `✓ 完成: ${project.name}`,
-          totalCurrent: i + 1,
-          totalCount: pendingProjects.length,
-          currentStep: '同步成功',
-          currentFile: '',
-          currentProgress: 100
-        })
-      } catch (e) {
-        console.error(`同步 ${project.name} 失败:`, e)
-        errors++
-        
-        updateBatchProgress({
-          totalStep: `✗ 失败: ${project.name}`,
-          totalCurrent: i + 1,
-          totalCount: pendingProjects.length,
-          currentStep: '同步失败',
-          currentFile: String(e),
-          currentProgress: 100
-        })
-      }
-
-      // API 限速
-      if (i < pendingProjects.length - 1 && !isCancelled()) {
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise(resolve => setTimeout(resolve, 500))
+        endSync()
+        return
       }
     }
 
     // 最终状态
-    if (!isCancelled()) {
+    if (!cancelled && !isCancelled()) {
       updateBatchProgress({
         totalStep: `🎉 全部完成！成功 ${synced} 个`,
         totalCurrent: pendingProjects.length,
@@ -194,14 +226,19 @@ export function Dashboard() {
         currentFile: '',
         currentProgress: 100
       })
+      
+      // 延迟一下再结束，让用户看到完成状态
+      await new Promise(resolve => setTimeout(resolve, 1000))
     }
     
-    setTimeout(async () => {
-      endSync()
-      message.success(`一键同步完成: 成功 ${synced} 个项目, 失败 ${errors} 个`)
-      // 刷新数据 - 确保重新检测待同步状态
-      await loadData()
-    }, 1500)
+    endSync()
+    
+    // 刷新数据
+    await loadData()
+    
+    if (synced > 0 && !cancelled) {
+      message.success(`成功同步 ${synced} 个项目${errors > 0 ? `，${errors} 个失败` : ''}`)
+    }
   }
 
   // 项目类型统计
