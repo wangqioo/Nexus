@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { storage } from '../../services/storage'
-import type { Note, ProjectType } from '../../types'
+import type { Note, ProjectType, CustomProjectType } from '../../types'
 import { NOTE_CATEGORIES, PROJECT_TYPES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
 import { logger } from '../../utils/logger'
@@ -36,6 +36,7 @@ export function Notes() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
+  const [customTypes, setCustomTypes] = useState<CustomProjectType[]>([])
 
   // 筛选：按项目类型分类
   const [selectedProjectType, setSelectedProjectType] = useState<ProjectType | 'all'>('all')
@@ -88,6 +89,10 @@ export function Notes() {
   const loadData = async () => {
     setLoading(true)
     try {
+      if (typeof window !== 'undefined' && window.electronAPI?.getCustomProjectTypes) {
+        const list = await window.electronAPI.getCustomProjectTypes() || []
+        setCustomTypes(list)
+      }
       const noteList = await storage.listNotes()
       setNotes(noteList)
     } catch (e) {
@@ -104,6 +109,11 @@ export function Notes() {
     }
     return stats
   }, [notes])
+
+  const allProjectTypes = useMemo(() => [
+    ...PROJECT_TYPES,
+    ...customTypes.map(ct => ({ id: ct.id, name: ct.name, icon: ct.icon, color: ct.color })),
+  ], [customTypes])
 
   const filteredNotes = useMemo(() => {
     let filtered = [...notes]
@@ -245,7 +255,7 @@ export function Notes() {
             <span className={styles.typeLabel}>全部</span>
             <span className={styles.typeCount}>{typeStats.all || 0}</span>
           </div>
-          {PROJECT_TYPES.map(type => (
+          {allProjectTypes.map(type => (
             <div
               key={type.id}
               className={`${styles.typeTab} ${selectedProjectType === type.id ? styles.typeTabActive : ''}`}
@@ -253,7 +263,7 @@ export function Notes() {
                 ? { background: type.color, borderColor: type.color }
                 : { borderLeftColor: type.color, borderLeftWidth: 3 }
               }
-              onClick={() => setSelectedProjectType(type.id)}
+              onClick={() => setSelectedProjectType(type.id as ProjectType)}
             >
               <span className={styles.typeIcon}>{getProjectTypeIcon(type.id, type.icon)}</span>
               <span className={styles.typeLabel}>{type.name}</span>
@@ -281,7 +291,7 @@ export function Notes() {
         <div className={styles.cardGrid}>
           {filteredNotes.map(note => {
             const typeId = note.projectType || 'unknown'
-            const typeConfig = PROJECT_TYPES.find(t => t.id === typeId)
+            const typeConfig = allProjectTypes.find(t => t.id === typeId)
             const color = typeConfig?.color || '#666'
             const catId = note.category || 'learning'
             const catInfo = getCategoryInfo(catId)
@@ -340,7 +350,7 @@ export function Notes() {
               searchQuery
                 ? `没有找到匹配 "${searchQuery}" 的结果`
                 : selectedProjectType !== 'all'
-                  ? `暂无${PROJECT_TYPES.find(t => t.id === selectedProjectType)?.name || ''}笔记`
+                  ? `暂无${allProjectTypes.find(t => t.id === selectedProjectType)?.name || ''}笔记`
                   : '笔记为空，点击"新建笔记"开始记录'
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -383,7 +393,7 @@ export function Notes() {
 
             <div className={styles.detailHeader}>
               {detailNote.projectType && (() => {
-                const tc = PROJECT_TYPES.find(t => t.id === detailNote!.projectType)
+                const tc = allProjectTypes.find(t => t.id === detailNote!.projectType)
                 return tc ? (
                   <Tag color={tc.color}>{getProjectTypeIcon(tc.id, tc.icon)} {tc.name}</Tag>
                 ) : (

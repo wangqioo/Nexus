@@ -1,6 +1,6 @@
 {
   "name": "nexus",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Nexus - 全栈项目开发经验管理中枢",
   "main": "dist-electron/main.js",
   "author": "Nexus",

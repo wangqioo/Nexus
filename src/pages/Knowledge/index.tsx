@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons'
 import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../../services/storage'
-import type { KnowledgeEntry, ProjectType } from '../../types'
+import type { KnowledgeEntry, ProjectType, CustomProjectType } from '../../types'
 import { PROJECT_TYPES, FIXED_KNOWLEDGE_CATEGORIES, KNOWLEDGE_CATEGORIES } from '../../types'
 import { getProjectTypeIcon } from '../../components/Icons'
 import { logger } from '../../utils/logger'
@@ -27,7 +27,8 @@ export function Knowledge() {
   const [entries, setEntries] = useState<KnowledgeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [categoriesByType, setCategoriesByType] = useState<CategoriesMap | null>(null)
-  
+  const [customTypes, setCustomTypes] = useState<CustomProjectType[]>([])
+
   // 筛选：项目类型 + 知识库固定 4 类
   const [selectedType, setSelectedType] = useState<ProjectType | 'all'>('all')
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all')
@@ -80,9 +81,14 @@ export function Knowledge() {
   const loadData = async () => {
     setLoading(true)
     try {
+      let customList: CustomProjectType[] = []
+      if (typeof window !== 'undefined' && window.electronAPI?.getCustomProjectTypes) {
+        customList = await window.electronAPI.getCustomProjectTypes() || []
+        setCustomTypes(customList)
+      }
       let categoriesByType: CategoriesMap | null = null
       if (typeof window !== 'undefined' && window.electronAPI?.getKnowledgeCategoriesForType) {
-        const types: ProjectType[] = PROJECT_TYPES.map(t => t.id)
+        const types: string[] = [...PROJECT_TYPES.map(t => t.id), ...customList.map(t => t.id)]
         const map: CategoriesMap = {}
         await Promise.all(
           types.map(async (t) => {
@@ -133,9 +139,15 @@ export function Knowledge() {
     return stats
   }, [entries, selectedType])
 
+  // 合并内置 + 自定义类型（与项目管理一致，含新建的项目类别）
+  const allProjectTypes = useMemo(() => [
+    ...PROJECT_TYPES,
+    ...customTypes.map(ct => ({ id: ct.id, name: ct.name, icon: ct.icon, color: ct.color, description: '', specificFields: [] as string[], knowledgeCategories: [] as { id: string; name: string; icon: string; description: string }[] })),
+  ], [customTypes])
+
   // 获取类型配置
-  const getTypeConfig = (type: ProjectType) => {
-    return PROJECT_TYPES.find(t => t.id === type)
+  const getTypeConfig = (type: ProjectType | string) => {
+    return allProjectTypes.find(t => t.id === type)
   }
 
   // 获取分类名称
@@ -287,7 +299,7 @@ export function Knowledge() {
             <span className={styles.typeLabel}>全部</span>
             <span className={styles.typeCount}>{typeStats.all || 0}</span>
           </div>
-          {PROJECT_TYPES.map(type => (
+          {allProjectTypes.map(type => (
             <div 
               key={type.id}
               className={`${styles.typeTab} ${selectedType === type.id ? styles.typeTabActive : ''}`}
@@ -295,7 +307,7 @@ export function Knowledge() {
                 ? { background: type.color, borderColor: type.color } 
                 : { borderLeftColor: type.color, borderLeftWidth: 3 }
               }
-              onClick={() => { setSelectedType(type.id); setSelectedCategory('all') }}
+              onClick={() => { setSelectedType(type.id as ProjectType); setSelectedCategory('all') }}
             >
               <span className={styles.typeIcon}>{getProjectTypeIcon(type.id, type.icon)}</span>
               <span className={styles.typeLabel}>{type.name}</span>
@@ -513,14 +525,16 @@ export function Knowledge() {
               rules={[{ required: true }]}
               style={{ flex: 1 }}
             >
-              <Select onChange={(v: ProjectType) => {
-                setFormType(v)
-                const cats = KNOWLEDGE_CATEGORIES[v]
+              <Select onChange={(v: ProjectType | string) => {
+                setFormType(v as ProjectType)
+                const cats = categoriesByType?.[v] ?? KNOWLEDGE_CATEGORIES[v as keyof typeof KNOWLEDGE_CATEGORIES]
                 if (cats && cats.length > 0) {
                   form.setFieldsValue({ category: cats[0].id })
+                } else {
+                  form.setFieldsValue({ category: FIXED_KNOWLEDGE_CATEGORIES[0]?.id || 'debug' })
                 }
               }}>
-                {PROJECT_TYPES.map(type => (
+                {allProjectTypes.map(type => (
                   <Select.Option key={type.id} value={type.id}>
                     {getProjectTypeIcon(type.id, type.icon)} {type.name}
                   </Select.Option>

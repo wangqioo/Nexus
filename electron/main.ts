@@ -1607,19 +1607,48 @@ ipcMain.handle('project:getTypeDir', async (_, projectType: string) => {
   return getProjectTypeDirs()[projectType] || path.join(os.homedir(), 'Workshop', 'Other')
 })
 
+/** 在模板配置中追加一条「项目类型变更」版本记录（不修改模板内容，仅做记录） */
+function addProjectTypeChangeRecord(summary: string): void {
+  try {
+    const config = loadTemplateConfig()
+    const record = {
+      version: config.version || '1.0',
+      timestamp: new Date().toISOString(),
+      changes: summary,
+    }
+    const next = {
+      ...config,
+      versionHistory: [...(config.versionHistory || []), record],
+    }
+    fs.writeFileSync(TEMPLATE_CONFIG_FILE, JSON.stringify(next, null, 2), 'utf-8')
+    logger.info(`模板版本记录: ${summary}`)
+  } catch (e) {
+    logger.error('追加项目类型变更记录失败:', e)
+  }
+}
+
 ipcMain.handle('project:getCustomTypes', () => loadCustomProjectTypes())
 ipcMain.handle('project:addCustomType', (_, payload: { id: string; name: string; icon?: string; color?: string }) => {
   const list = loadCustomProjectTypes()
   const id = (payload.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'custom'
   if (list.some(t => t.id === id)) return { success: false, error: '该类型 ID 已存在' }
+  const name = (payload.name || id).trim()
   list.push({
     id,
-    name: (payload.name || id).trim(),
+    name,
     icon: payload.icon ?? '📁',
     color: payload.color ?? '#8c8c8c',
     templateRef: 'software',
   })
-  return saveCustomProjectTypes(list) ? { success: true, type: list[list.length - 1] } : { success: false, error: '保存失败' }
+  if (!saveCustomProjectTypes(list)) return { success: false, error: '保存失败' }
+  // 新建类型时：创建知识库对应目录，便于同步时写入；并记录到模板版本历史
+  const knowledgeTypeDir = path.join(DATA_DIR, 'knowledge', id)
+  if (!fs.existsSync(knowledgeTypeDir)) {
+    fs.mkdirSync(knowledgeTypeDir, { recursive: true })
+    logger.info(`已创建知识库目录: knowledge/${id}`)
+  }
+  addProjectTypeChangeRecord(`新增项目类型: ${name} (${id})`)
+  return { success: true, type: list[list.length - 1] }
 })
 
 // 删除项目目录（移动到废纸篓）
@@ -1694,6 +1723,13 @@ ${template.aiPrompt}
 `
   }
   
+  const mergedDefs = getMergedProjectTypeDefs()
+  const customTypes = loadCustomProjectTypes()
+  const projectTypesList = mergedDefs.map(d => {
+    const ct = customTypes.find(c => c.id === d.id)
+    return ct ? `${d.id}（${ct.name}）` : d.id
+  }).join('、')
+
   return `# Nexus 项目开发规则
 
 ## 项目信息
@@ -1702,6 +1738,13 @@ ${template.aiPrompt}
 - **芯片**: ${projectConfig.chip || '未指定'}
 - **框架**: ${projectConfig.framework || '未指定'}
 - **外设**: ${(projectConfig.peripherals || []).join(', ') || '无'}
+- **项目类型**: ${projectConfig.projectType || '未指定'}（同步后知识库写入 knowledge/<项目类型>/，笔记按项目类型在笔记面板分类）
+
+## 当前支持的项目类型（供提取/归类参考）
+
+${projectTypesList}
+
+（若新增了自定义类型，以 Nexus 应用内「项目管理」显示为准；同步经验时按项目的 projectType 写入对应知识库与笔记分类。）
 
 ## 开发经验记录
 
@@ -3407,7 +3450,16 @@ ipcMain.handle('ai:analyzeLocalProject', async (_, projectPath: string, apiKey: 
       const preview = content.substring(0, 1500)
       mainCode += `\n=== ${path.relative(projectPath, mainFile)} ===\n${preview}\n`
     }
-    
+
+    const builtinTypeIds = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote', 'fpga']
+    const customTypes = loadCustomProjectTypes()
+    const customTypeIds = customTypes.map(t => t.id)
+    const allTypeIds = [...builtinTypeIds, ...customTypeIds]
+    const projectTypeListStr = allTypeIds.join('/')
+    const customTypeLines = customTypes.length > 0
+      ? '\n' + customTypes.map(t => `- ${t.id}: ${t.name}（用户自定义类型）`).join('\n')
+      : ''
+
     // 构建 prompt
     const prompt = `分析这个项目并返回 JSON 格式的信息:
 
@@ -3427,9 +3479,9 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
   "name": "项目名称（中文，简短易懂）",
   "description": "一句话中文描述（不超过30字）",
   "summary": "详细介绍（2-4段中文，约200-400字）",
-  "projectType": "项目类型：若能明确归入以下之一则填 mcu/ai/software/linux/mobile/remote/fpga；若无法归入任何一类则填建议的新类型英文标识，如 game、iot、tool",
-  "suggestedNewTypeName": "当 projectType 为新类型时必填，为该类型的简短中文名，如 游戏、IoT、工具；否则可省略",
-  "confidenceByType": "对象，键为 mcu/ai/software/linux/mobile/remote/fpga，值为 0-1 的占比，表示归属到该类型的推荐度，总和为 1。例如 {\"mcu\":0.1,\"ai\":0,\"software\":0.6,\"linux\":0.1,\"mobile\":0.1,\"remote\":0.1,\"fpga\":0}",
+  "projectType": "项目类型：若能明确归入以下之一则填 ${projectTypeListStr}；若无法归入任何一类则填建议的新类型英文标识，如 game、iot、tool",
+  "suggestedNewTypeName": "当 projectType 为上述列表之外的新类型时必填，为该类型的简短中文名，如 游戏、IoT、工具；否则可省略",
+  "confidenceByType": "对象，键为 mcu/ai/software/linux/mobile/remote/fpga，值为 0-1 的占比，表示归属到该类型的推荐度，总和为 1。例如 {\\"mcu\\":0.1,\\"ai\\":0,\\"software\\":0.6,\\"linux\\":0.1,\\"mobile\\":0.1,\\"remote\\":0.1,\\"fpga\\":0}",
   "chip": "芯片型号，如无则留空",
   "framework": "开发框架",
   "peripherals": ["外设1", "外设2"],
@@ -3444,11 +3496,11 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
 - linux: Linux 平台（驱动、系统移植、RK3588 等）
 - mobile: 移动端（iOS、Android、Flutter、RN 等）
 - remote: 远程设备/DevOps（部署、运维脚本等）
-- fpga: FPGA/数字逻辑（Verilog、VHDL、Xilinx、Intel FPGA、综合与时序等）
+- fpga: FPGA/数字逻辑（Verilog、VHDL、Xilinx、Intel FPGA、综合与时序等）${customTypeLines}
 
 分析要点:
-- 若项目明显属于上述某一类，projectType 填该类，confidenceByType 中该类最高。
-- 若项目不属于任何一类（如纯游戏、IoT 产品、独立工具），projectType 填新类型英文标识（小写），suggestedNewTypeName 填中文名，confidenceByType 仍给出对七类的推荐占比供用户参考。
+- 若项目明显属于上述某一类（含自定义类型），projectType 填该类，confidenceByType 中对应内置类最高。
+- 若项目不属于任何一类（如纯游戏、IoT 产品、独立工具），projectType 填新类型英文标识（小写），suggestedNewTypeName 填中文名，confidenceByType 仍给出对七类内置的推荐占比供用户参考。
 - confidenceByType 必须包含全部七个键（mcu/ai/software/linux/mobile/remote/fpga），值均为数字且总和为 1。`
 
     const opts = getAiRequestOptions(apiKey)
@@ -3468,9 +3520,11 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0])
-      const known = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote', 'fpga']
+      const builtin = ['mcu', 'ai', 'software', 'linux', 'mobile', 'remote', 'fpga']
+      const customIds = loadCustomProjectTypes().map(t => t.id)
+      const known = [...builtin, ...customIds]
       if (typeof result.confidenceByType !== 'object') {
-        result.confidenceByType = known.reduce((acc, k) => ({ ...acc, [k]: result.projectType === k ? 1 : 0 }), {} as Record<string, number>)
+        result.confidenceByType = builtin.reduce((acc, k) => ({ ...acc, [k]: result.projectType === k ? 1 : 0 }), {} as Record<string, number>)
       }
       if (!result.suggestedNewTypeName && known.indexOf(result.projectType) === -1) {
         result.suggestedNewTypeName = result.projectType || '未分类'

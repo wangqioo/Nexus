@@ -257,6 +257,17 @@
   margin-left: 8px;
 }
 
+.moveToFrontBtn {
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.2s;
+}
+
+.moveToFrontBtn:hover {
+  color: var(--accent-primary);
+}
+
 .silIcon {
   color: var(--accent-success);
   font-size: 14px;

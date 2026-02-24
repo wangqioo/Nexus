@@ -11,7 +11,8 @@ import {
   EditOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
   FileTextOutlined, BugOutlined, CodeSandboxOutlined, SettingOutlined,
   ReloadOutlined, ImportOutlined, ExportOutlined, EyeOutlined,
-  ThunderboltOutlined, GithubOutlined, ClockCircleOutlined, RightOutlined
+  ThunderboltOutlined, GithubOutlined, ClockCircleOutlined, RightOutlined,
+  PushpinOutlined
 } from '@ant-design/icons'
 import type { LocalProject, SilProjectConfig, SilDocument, SilProjectData, ProjectType, CustomProjectType, LocalProjectAnalysis } from '../../types'
 import { PROJECT_TYPES } from '../../types'
@@ -71,6 +72,7 @@ export function Projects() {
   const [projects, setProjects] = useState<LocalProject[]>([])
   const [filteredProjects, setFilteredProjects] = useState<LocalProject[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [selectedType, setSelectedType] = useState<string | 'all'>('all')
   const [loading, setLoading] = useState(true)
   
@@ -188,9 +190,15 @@ export function Projects() {
     load()
   }, [])
 
+  // 搜索防抖：避免每次按键都触发筛选，减少无结果时的卡顿/卡死
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
   useEffect(() => {
     filterProjects()
-  }, [projects, searchQuery, selectedType])
+  }, [projects, debouncedSearchQuery, selectedType])
 
   const loadProjects = async () => {
     setLoading(true)
@@ -335,42 +343,27 @@ export function Projects() {
   }
 
   const filterProjects = () => {
-    // 排序：按「最近活动」时间降序（最近打开的 或 最近导入的 排最前）
-    // 取 max(lastOpenedInCursor, addedAt)，没有的用列表索引反推（新导入的已在列表最前）
+    // 展示顺序 = 保存的列表顺序（不在这里重排），保证更新应用后顺序不变
     let filtered = [...projects]
-    const indexMap = new Map(projects.map((p, idx) => [p.id, idx]))
-    const now = Date.now()
 
-    const getSortTime = (p: LocalProject): number => {
-      const opened = p.lastOpenedInCursor ? new Date(p.lastOpenedInCursor).getTime() : 0
-      const added = p.addedAt ? new Date(p.addedAt).getTime() : 0
-      if (opened || added) return Math.max(opened, added)
-      // 兼容旧数据：无时间则用列表顺序，索引越小越新
-      const idx = indexMap.get(p.id) ?? 0
-      return now - (projects.length - idx) * 1000
-    }
-
-    filtered.sort((a, b) => getSortTime(b) - getSortTime(a))
-    
     // 按类型筛选
     if (selectedType !== 'all') {
       filtered = filtered.filter(p => p.projectType === selectedType)
     }
-    
-    // 按搜索词筛选
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+
+    // 按防抖后的搜索词筛选，避免输入时频繁重算导致卡死
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.trim().toLowerCase()
       filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(query) ||
-        p.description?.toLowerCase().includes(query) ||
-        p.chip?.toLowerCase().includes(query) ||
-        p.framework?.toLowerCase().includes(query) ||
+        (p.description?.toLowerCase().includes(query)) ||
+        (p.chip?.toLowerCase().includes(query)) ||
+        (p.framework?.toLowerCase().includes(query)) ||
         p.tags.some(t => t.toLowerCase().includes(query))
       )
     }
-    
+
     setFilteredProjects(filtered)
-    // 筛选条件变化时重置到第一页
     setCurrentPage(1)
   }
   
@@ -1339,14 +1332,21 @@ export function Projects() {
       return
     }
     
-    // 记录打开时间并更新项目数据
-    const updatedProjects = projects.map(p => 
-      p.id === project.id 
-        ? { ...p, lastOpenedInCursor: new Date().toISOString() }
-        : p
-    )
+    // 记录打开时间，并把该项目移到列表最前并持久化（顺序在下次打开/更新后仍保留）
+    const updated = { ...project, lastOpenedInCursor: new Date().toISOString() }
+    const rest = projects.filter(p => p.id !== project.id)
+    const updatedProjects = [updated, ...rest]
     setProjects(updatedProjects)
     await saveProjects(updatedProjects)
+  }
+
+  // 移到最前：把该项目排到列表第一位并保存（非永久置顶，新项目/在 Cursor 打开其他项目会按正常顺序排）
+  const handleMoveToFront = async (project: LocalProject) => {
+    const rest = projects.filter(p => p.id !== project.id)
+    const updatedProjects = [project, ...rest]
+    setProjects(updatedProjects)
+    await saveProjects(updatedProjects)
+    message.success('已移到最前')
   }
 
   const handleOpenInFinder = async (project: LocalProject) => {
@@ -1789,6 +1789,12 @@ export function Projects() {
                       </Tooltip>
                     </div>
                     <div className={styles.cardActions} onClick={(e) => e.stopPropagation()}>
+                      <Tooltip title="移到最前（新项目或用 Cursor 打开其他项目会按正常顺序排）">
+                        <PushpinOutlined
+                          className={styles.moveToFrontBtn}
+                          onClick={() => handleMoveToFront(project)}
+                        />
+                      </Tooltip>
                       {project.hasSil ? (
                         <Tooltip title="已初始化 .nexus">
                           <CheckCircleOutlined className={styles.silIcon} />
@@ -1863,27 +1869,50 @@ export function Projects() {
         </>
       ) : (
         <div className={styles.emptyState}>
-          {projects.length > 0 && !searchQuery ? (
-            <Spin size="large" tip="加载项目中..." />
-          ) : (
+          {projects.length === 0 ? (
             <Empty
-              description={projects.length === 0 ? "还没有添加任何项目" : "没有找到匹配的项目"}
+              description="还没有添加任何项目"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             >
-              {projects.length === 0 && (
-                <Dropdown
-                  menu={{
-                    items: [
-                      { key: 'local', icon: <FolderAddOutlined />, label: '本地项目', onClick: () => handleOpenImport('local') },
-                      { key: 'github', icon: <GithubOutlined />, label: 'GitHub 项目', onClick: () => handleOpenImport('github') },
-                    ],
-                  }}
-                  placement="bottom"
-                >
-                  <Button type="primary" icon={<PlusOutlined />}>导入第一个项目</Button>
-                </Dropdown>
-              )}
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'local', icon: <FolderAddOutlined />, label: '本地项目', onClick: () => handleOpenImport('local') },
+                    { key: 'github', icon: <GithubOutlined />, label: 'GitHub 项目', onClick: () => handleOpenImport('github') },
+                  ],
+                }}
+                placement="bottom"
+              >
+                <Button type="primary" icon={<PlusOutlined />}>导入第一个项目</Button>
+              </Dropdown>
             </Empty>
+          ) : searchQuery.trim() || debouncedSearchQuery.trim() ? (
+            <Empty
+              description={`没有找到与「${(searchQuery || debouncedSearchQuery).trim()}」匹配的项目`}
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            >
+              <Button
+                type="primary"
+                onClick={() => {
+                  setSearchQuery('')
+                  setDebouncedSearchQuery('')
+                }}
+              >
+                清空搜索
+              </Button>
+            </Empty>
+          ) : selectedType !== 'all' ? (
+            <Empty
+              description={`该类型下暂无项目`}
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            >
+              <Button onClick={() => setSelectedType('all')}>查看全部项目</Button>
+            </Empty>
+          ) : (
+            <Empty
+              description="暂无项目"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
           )}
         </div>
       )}
@@ -2723,14 +2752,10 @@ export function Projects() {
                 onClick={async () => {
                   const success = await window.electronAPI.openInCursor(importedProject.path)
                   if (success) {
-                    // 记录打开时间并更新项目数据
-                    const updatedProjects = projects.map(p => 
-                      p.id === importedProject.id 
-                        ? { ...p, lastOpenedInCursor: new Date().toISOString() }
-                        : p
-                    )
-                    setProjects(updatedProjects)
-                    await saveProjects(updatedProjects)
+                    const updated = { ...importedProject, lastOpenedInCursor: new Date().toISOString() }
+                    const rest = projects.filter(p => p.id !== importedProject.id)
+                    setProjects([updated, ...rest])
+                    await saveProjects([updated, ...rest])
                   }
                   setImportSuccessOpen(false)
                 }}
