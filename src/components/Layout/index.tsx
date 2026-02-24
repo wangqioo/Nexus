@@ -358,7 +358,7 @@ function LayoutInner({ children }: LayoutProps) {
               <div className={styles.logoIcon}><NexusLogo size={28} /></div>
               <div className={styles.logoTextContainer}>
                 <Title level={4} className={styles.logoText}>Nexus 码迹</Title>
-                <span className={styles.version}>v2.0</span>
+                <span className={styles.version}>v{__APP_VERSION__}</span>
               </div>
             </>
           ) : (

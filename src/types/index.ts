@@ -565,6 +565,7 @@ export interface LocalProject {
   pendingCount?: number           // 待同步文档数量 (运行时计算)
   lastActivity?: string           // 最后活动时间
   lastOpenedInCursor?: string     // 最后在 Cursor 中打开的时间（ISO 字符串）
+  addedAt?: string                // 加入列表的时间（ISO 字符串），用于排序：新导入的排最前
   githubUrl?: string
   status: 'active' | 'archived'
 }

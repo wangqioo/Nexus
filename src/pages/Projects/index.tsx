@@ -53,6 +53,12 @@ function getFolderName(projectPath: string): string {
   if (!projectPath || typeof projectPath !== 'string') return ''
   return projectPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || ''
 }
+
+// 路径规范化（统一为 /），便于跨平台比较与相对路径计算
+function normalizePath(p: string): string {
+  if (!p || typeof p !== 'string') return ''
+  return p.replace(/\\/g, '/').replace(/\/+/g, '/')
+}
 function getProjectDisplayName(project: LocalProject): string {
   const folder = getFolderName(project.path)
   const summary = project.name
@@ -329,39 +335,22 @@ export function Projects() {
   }
 
   const filterProjects = () => {
-    // 排序逻辑：
-    // 1. 优先显示最近在 Cursor 打开的项目（按 lastOpenedInCursor 降序）
-    // 2. 然后显示最新导入的项目（数组顺序：最早导入在前，最新导入在后，需要反转）
+    // 排序：按「最近活动」时间降序（最近打开的 或 最近导入的 排最前）
+    // 取 max(lastOpenedInCursor, addedAt)，没有的用列表索引反推（新导入的已在列表最前）
     let filtered = [...projects]
-    
-    // 创建索引映射，用于保持未打开项目的导入顺序
     const indexMap = new Map(projects.map((p, idx) => [p.id, idx]))
-    
-    // 排序：有 lastOpenedInCursor 的优先，然后按时间降序；没有的按导入顺序（索引降序，即最新导入在前）
-    filtered.sort((a, b) => {
-      const aHasOpened = !!a.lastOpenedInCursor
-      const bHasOpened = !!b.lastOpenedInCursor
-      
-      // 如果都有打开记录，按打开时间降序（最近打开的在前）
-      if (aHasOpened && bHasOpened) {
-        return new Date(b.lastOpenedInCursor!).getTime() - new Date(a.lastOpenedInCursor!).getTime()
-      }
-      
-      // 如果只有 a 有打开记录，a 排在前面
-      if (aHasOpened && !bHasOpened) {
-        return -1
-      }
-      
-      // 如果只有 b 有打开记录，b 排在前面
-      if (!aHasOpened && bHasOpened) {
-        return 1
-      }
-      
-      // 都没有打开记录，按导入顺序降序（索引大的在前，即最新导入的在前）
-      const aIndex = indexMap.get(a.id) ?? 0
-      const bIndex = indexMap.get(b.id) ?? 0
-      return bIndex - aIndex
-    })
+    const now = Date.now()
+
+    const getSortTime = (p: LocalProject): number => {
+      const opened = p.lastOpenedInCursor ? new Date(p.lastOpenedInCursor).getTime() : 0
+      const added = p.addedAt ? new Date(p.addedAt).getTime() : 0
+      if (opened || added) return Math.max(opened, added)
+      // 兼容旧数据：无时间则用列表顺序，索引越小越新
+      const idx = indexMap.get(p.id) ?? 0
+      return now - (projects.length - idx) * 1000
+    }
+
+    filtered.sort((a, b) => getSortTime(b) - getSortTime(a))
     
     // 按类型筛选
     if (selectedType !== 'all') {
@@ -542,6 +531,7 @@ export function Projects() {
         documentCount: 0,
         status: 'active',
         githubUrl: values.githubUrl || '',
+        addedAt: new Date().toISOString(),
       }
       
         // 检查是否已有 .nexus 目录
@@ -574,7 +564,7 @@ export function Projects() {
         }
       }
       
-      const newProjects = [...projects, newProject]
+      const newProjects = [newProject, ...projects]
       const saved = await saveProjects(newProjects)
       
       if (saved) {
@@ -676,6 +666,7 @@ export function Projects() {
       documentCount: 0,
       status: 'active',
       githubUrl: source.url,
+      addedAt: new Date().toISOString(),
     }
     const silConfig = {
       id: newProject.id,
@@ -690,7 +681,7 @@ export function Projects() {
     }
     const initSuccess = await window.electronAPI.initSilProject(finalPath, silConfig)
     if (initSuccess) newProject.hasSil = true
-    const newProjects = [...projects, newProject]
+    const newProjects = [newProject, ...projects]
     await saveProjects(newProjects)
     setProjects(newProjects)
     setImportedProject(newProject)
@@ -798,6 +789,7 @@ export function Projects() {
         documentCount: 0,
         status: 'active',
         githubUrl: url,
+        addedAt: new Date().toISOString(),
       }
       
       // 使用统一模板初始化 .nexus（projectType 写入 project.yaml）
@@ -818,8 +810,8 @@ export function Projects() {
         newProject.hasSil = true
       }
       
-      // 保存项目
-      const newProjects = [...projects, newProject]
+      // 保存项目（新导入的放最前）
+      const newProjects = [newProject, ...projects]
       await saveProjects(newProjects)
       setProjects(newProjects)
       
@@ -875,7 +867,7 @@ export function Projects() {
       }
       const newProject: LocalProject = {
         id: Date.now().toString(),
-        name: result.introZh || result.nameEn || result.path.split('/').filter(Boolean).pop() || '新项目',
+        name: result.introZh || result.nameEn || result.path.split(/[/\\]/).filter(Boolean).pop() || '新项目',
         path: result.path,
         description: result.introZh || '',
         projectType,
@@ -883,8 +875,9 @@ export function Projects() {
         hasSil: false,
         documentCount: 0,
         status: 'active',
+        addedAt: new Date().toISOString(),
       }
-      const newProjects = [...projects, newProject]
+      const newProjects = [newProject, ...projects]
       await saveProjects(newProjects)
       setProjects(newProjects)
       setImportModalOpen(false)
@@ -937,9 +930,10 @@ export function Projects() {
         documentCount: 0,
         status: 'active',
         githubUrl: values.githubUrl || '',
+        addedAt: new Date().toISOString(),
       }
       
-      const newProjects = [...projects, newProject]
+      const newProjects = [newProject, ...projects]
       const saved = await saveProjects(newProjects)
       
       if (saved) {
@@ -1443,9 +1437,9 @@ export function Projects() {
       return
     }
     
-    // 过滤掉已导入的
-    const existingPaths = new Set(projects.map(p => p.path))
-    const newProjects = scanResult.projects.filter(p => !existingPaths.has(p.path))
+    // 过滤掉已导入的（路径规范化后比较，兼容 Windows 反斜杠与 macOS/Linux 正斜杠）
+    const existingPaths = new Set(projects.map(p => normalizePath(p.path)))
+    const newProjects = scanResult.projects.filter(p => !existingPaths.has(normalizePath(p.path)))
     setBatchNewProjects(newProjects)
     
     if (newProjects.length === 0) {
@@ -1475,7 +1469,7 @@ export function Projects() {
       logger.error('清理知识库失败:', e)
     }
     
-    const updatedProjects = [...projects]
+    const batchImported: LocalProject[] = []
     let imported = 0
     let errors = 0
     let unclassifiedCount = 0
@@ -1531,6 +1525,7 @@ export function Projects() {
           hasSil: proj.hasNexus,
           documentCount: 0,
           status: 'active',
+          addedAt: new Date().toISOString(),
         }
         
         // 4. 使用统一模板初始化 .nexus
@@ -1571,7 +1566,7 @@ export function Projects() {
           }
         }
         
-        updatedProjects.push(newProject)
+        batchImported.push(newProject)
         imported++
         await new Promise(resolve => setTimeout(resolve, 800))
         
@@ -1581,6 +1576,8 @@ export function Projects() {
       }
     }
     
+    // 新导入的放最前
+    const updatedProjects = [...batchImported, ...projects]
     setProjects(updatedProjects)
     await saveProjects(updatedProjects)
     
@@ -2150,7 +2147,7 @@ export function Projects() {
                         <span>{p.hasNexus ? '✅' : '⚪'}</span>
                         <span style={{ fontWeight: 500 }}>{p.name}</span>
                         <span className={styles.scanResultPath}>
-                          {p.path.replace(batchScanDir + '/', '')}
+                          {normalizePath(p.path).replace(normalizePath(batchScanDir) + '/', '') || p.name}
                         </span>
                       </div>
                     ))}
