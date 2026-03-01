@@ -315,6 +315,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   padding-top: 10px;
   border-top: 1px solid var(--border-primary);
   transition: border-color 0.3s;
@@ -327,6 +329,23 @@
   align-items: center;
   gap: 4px;
   transition: color 0.3s;
+}
+
+.versionRow {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+.versionRow:hover {
+  color: var(--accent-primary);
 }
 
 .lastUpdate {

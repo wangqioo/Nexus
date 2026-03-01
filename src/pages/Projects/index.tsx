@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Typography, Input, Button, Card, Tag, Empty, Space,
   message, Row, Col, Tooltip, Spin, Modal, Form,
@@ -69,6 +69,7 @@ function getProjectDisplayName(project: LocalProject): string {
 
 export function Projects() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [projects, setProjects] = useState<LocalProject[]>([])
   const [filteredProjects, setFilteredProjects] = useState<LocalProject[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -142,6 +143,12 @@ export function Projects() {
   const [newTypeName, setNewTypeName] = useState('')
   const [selectedExistingTypeId, setSelectedExistingTypeId] = useState<string>('')
   const [unclassifiedSubmitting, setUnclassifiedSubmitting] = useState(false)
+  
+  /** 当前选中的版本（仅当前会话有效）：projectId -> { version, summary, createdAt }，null/未设置表示「最新」 */
+  const [selectedVersionByProject, setSelectedVersionByProject] = useState<Record<string, { version: string; summary: string; createdAt: string } | null>>({})
+  /** 版本选择器：当前打开的是哪个项目的选择器，以及该项目的版本列表 */
+  const [versionSelectorProjectId, setVersionSelectorProjectId] = useState<string | null>(null)
+  const [versionListForSelector, setVersionListForSelector] = useState<Array<{ version: string; summary: string; createdAt: string }>>([])
   
   // 使用全局同步状态
   const { syncing, syncProgress, startSync, updateProgress, endSync } = useSync()
@@ -309,6 +316,14 @@ export function Projects() {
     }
   }, [currentPage, pageSize, filteredProjects.length, loading])
 
+  // 离开项目管理页或切换到其他面板时，恢复为「最新」避免误用旧版本
+  useEffect(() => {
+    if (location.pathname !== '/projects') {
+      setSelectedVersionByProject({})
+      setVersionSelectorProjectId(null)
+    }
+  }, [location.pathname])
+
   // 同步版本（用于刷新按钮等需要等待的场景）
   const checkProjectsStatus = async (projectList: LocalProject[]) => {
     const updatedProjects = await Promise.all(
@@ -363,8 +378,10 @@ export function Projects() {
       )
     }
 
-    setFilteredProjects(filtered)
-    setCurrentPage(1)
+    // 空结果时沿用同一引用，避免反复 setState 新 [] 导致卡顿/卡死（尤其某分类下无结果时）
+    setFilteredProjects(prev => (filtered.length === 0 && prev.length === 0 ? prev : filtered))
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    setCurrentPage(prev => (filtered.length === 0 || prev > totalPages ? 1 : prev))
   }
   
   // 当前页显示的项目（分页）
@@ -535,8 +552,13 @@ export function Projects() {
           // 已有 .nexus，直接同步经验到管理器
         newProject.hasSil = true
         const syncResult = await window.electronAPI.syncFromProject(finalPath, undefined, newProject.projectType)
-        if (syncResult.success && (syncResult.imported > 0 || syncResult.updated > 0)) {
-          newProject.documentCount = syncResult.imported + syncResult.updated
+        if (syncResult.success) {
+          if (syncResult.imported > 0 || syncResult.updated > 0) {
+            newProject.documentCount = syncResult.imported + syncResult.updated
+          }
+          if (syncResult.latestVersion != null) newProject.latestVersion = syncResult.latestVersion
+          if (syncResult.latestVersionSummary != null) newProject.latestVersionSummary = syncResult.latestVersionSummary
+          if (syncResult.latestVersionDate != null) newProject.latestVersionDate = syncResult.latestVersionDate
         }
         } else {
           // 没有 .nexus，使用统一模板自动初始化（projectType 写入 project.yaml，用于同步时知识库目录与笔记筛选）
@@ -1313,7 +1335,17 @@ export function Projects() {
         } else {
           message.info('没有新的经验文档需要导入')
         }
-        await checkProjectsStatus(projects)
+        let listToCheck = projects
+        if (result.latestVersion != null || result.latestVersionSummary != null || result.latestVersionDate != null) {
+          const updated = projects.map(p => p.id === project.id
+            ? { ...p, latestVersion: result.latestVersion, latestVersionSummary: result.latestVersionSummary, latestVersionDate: result.latestVersionDate }
+            : p
+          )
+          setProjects(updated)
+          await saveProjects(updated)
+          listToCheck = updated
+        }
+        await checkProjectsStatus(listToCheck)
       } else {
         message.error(`导入失败: ${result.errors?.join(', ') || '未知错误'}`)
       }
@@ -1324,15 +1356,29 @@ export function Projects() {
     }
   }
 
-  // 打开操作
+  // 打开操作：若当前选了旧版本则先 checkout 再打开，打开后恢复为「最新」
   const handleOpenInCursor = async (project: LocalProject) => {
+    const selected = selectedVersionByProject[project.id]
+    if (selected) {
+      const { success, error } = await window.electronAPI.gitCheckout(project.path, selected.version)
+      if (!success) {
+        message.error(`切换版本失败: ${error ?? '未知错误'}`)
+        return
+      }
+    }
     const success = await window.electronAPI.openInCursor(project.path)
     if (!success) {
       message.error('打开失败，请确保已安装 Cursor')
       return
     }
-    
-    // 记录打开时间，并把该项目移到列表最前并持久化（顺序在下次打开/更新后仍保留）
+    if (selected) {
+      setSelectedVersionByProject(prev => {
+        const next = { ...prev }
+        delete next[project.id]
+        return next
+      })
+    }
+    // 记录打开时间，并把该项目移到列表最前并持久化
     const updated = { ...project, lastOpenedInCursor: new Date().toISOString() }
     const rest = projects.filter(p => p.id !== project.id)
     const updatedProjects = [updated, ...rest]
@@ -1560,7 +1606,12 @@ export function Projects() {
         if (newProject.documentCount > 0) {
           updateProgress({ step: `同步到知识库...`, current: i, total: batchNewProjects.length, file: proj.name })
           try {
-            await window.electronAPI.syncFromProject(finalPath, apiKey, newProject.projectType)
+            const syncRes = await window.electronAPI.syncFromProject(finalPath, apiKey, newProject.projectType)
+            if (syncRes?.success && syncRes.latestVersion != null) {
+              newProject.latestVersion = syncRes.latestVersion
+              newProject.latestVersionSummary = syncRes.latestVersionSummary
+              newProject.latestVersionDate = syncRes.latestVersionDate
+            }
           } catch (syncErr) {
             logger.error(`[Sync] ${proj.name} 同步失败:`, syncErr)
           }
@@ -1838,6 +1889,56 @@ export function Projects() {
                     <span className={styles.docCount} title="该项目 .nexus 内已有文档数">
                       <FileTextOutlined /> {project.documentCount ?? 0} 篇
                     </span>
+                    {/* 版本：选中态或最新，点击可切换版本；以提交时间区分新旧 */}
+                    {(() => {
+                      const sel = selectedVersionByProject[project.id]
+                      const version = sel ?? (project.latestVersion ? { version: project.latestVersion, summary: project.latestVersionSummary ?? '', createdAt: project.latestVersionDate ?? '' } : null)
+                      const shortLabel = version ? `${version.version}${version.summary ? ` - ${version.summary}` : ''}` : '暂无版本'
+                      const dateLabel = version?.createdAt ? new Date(version.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : ''
+                      return (
+                        <Dropdown
+                          trigger={['click']}
+                          open={versionSelectorProjectId === project.id}
+                          onOpenChange={async (open) => {
+                            if (open) {
+                              setVersionSelectorProjectId(project.id)
+                              try {
+                                const list = await window.electronAPI.getVersionList(project.path)
+                                setVersionListForSelector(list)
+                              } catch {
+                                setVersionListForSelector([])
+                              }
+                            } else {
+                              setVersionSelectorProjectId(null)
+                            }
+                          }}
+                          menu={{
+                            items: [
+                              {
+                                key: '__latest__',
+                                label: '最新 (当前)',
+                                onClick: () => {
+                                  setSelectedVersionByProject(prev => ({ ...prev, [project.id]: null }))
+                                  setVersionSelectorProjectId(null)
+                                }
+                              },
+                              ...versionListForSelector.map(v => ({
+                                key: `${v.version}\x00${v.createdAt}`,
+                                label: `${v.version}${v.summary ? ` - ${v.summary}` : ''} (${new Date(v.createdAt).toLocaleDateString('zh-CN')})`,
+                                onClick: () => {
+                                  setSelectedVersionByProject(prev => ({ ...prev, [project.id]: v }))
+                                  setVersionSelectorProjectId(null)
+                                }
+                              }))
+                            ]
+                          }}
+                        >
+                          <span className={styles.versionRow} title="点击选择版本，在 Cursor 打开时会切到此版本">
+                            <CodeSandboxOutlined /> {shortLabel} {dateLabel && ` · ${dateLabel}`}
+                          </span>
+                        </Dropdown>
+                      )
+                    })()}
                     <span className={styles.lastUpdate}>
                       <ClockCircleOutlined /> {formatRelativeTime(project.lastActivity)}
                     </span>
@@ -2750,8 +2851,23 @@ export function Projects() {
                 type="primary" 
                 icon={<CodeOutlined />}
                 onClick={async () => {
+                  const selected = selectedVersionByProject[importedProject.id]
+                  if (selected) {
+                    const { success: ok } = await window.electronAPI.gitCheckout(importedProject.path, selected.version)
+                    if (!ok) {
+                      message.error('切换版本失败')
+                      return
+                    }
+                  }
                   const success = await window.electronAPI.openInCursor(importedProject.path)
                   if (success) {
+                    if (selected) {
+                      setSelectedVersionByProject(prev => {
+                        const next = { ...prev }
+                        delete next[importedProject.id]
+                        return next
+                      })
+                    }
                     const updated = { ...importedProject, lastOpenedInCursor: new Date().toISOString() }
                     const rest = projects.filter(p => p.id !== importedProject.id)
                     setProjects([updated, ...rest])

@@ -429,6 +429,10 @@ export interface ElectronAPI {
   verifyProjectPaths: (projects: Array<{ id: string, path: string, projectType?: string }>) => 
     Promise<Record<string, { valid: boolean, newPath?: string, reason?: string }>>
   // Git 操作
+  /** 获取项目 git tags 版本列表（按创建时间降序），用于版本选择 */
+  getVersionList: (projectPath: string) => Promise<Array<{ version: string; summary: string; createdAt: string }>>
+  /** 在项目目录执行 git checkout ref（tag 或 commit），用于「在 Cursor 打开」时切到选中版本 */
+  gitCheckout: (projectPath: string, ref: string) => Promise<{ success: boolean; error?: string }>
   gitClone: (url: string, targetPath: string, branch?: string) => Promise<GitOperationResult>
   onGitCloneProgress: (callback: (data: { percent: number; speedText: string }) => void) => () => void
   gitPull: (repoPath: string) => Promise<GitOperationResult>
@@ -449,6 +453,8 @@ export interface ElectronAPI {
   deleteProjectDir: (projectPath: string) => Promise<{ success: boolean; message?: string; error?: string }>
   // AI 分析
   analyzeGitHubRepo: (url: string, apiKey: string) => Promise<GitHubRepoAnalysis | null>
+  /** 从文本中提取 GitHub 仓库链接（正则+AI），用于批量导入 */
+  extractGitHubUrls: (text: string, apiKey: string) => Promise<{ urls: string[] }>
   analyzeLocalProject: (projectPath: string, apiKey: string) => Promise<LocalProjectAnalysis | null>
   generateProjectDocs: (projectPath: string, apiKey: string) => Promise<{ success: boolean; generated?: { notes: number; snippets: number; configs: number }; error?: string }>
   createProjectFromIdea: (apiKey: string, idea: string, projectType: string) => Promise<{ success: boolean; path?: string; nameEn?: string; introZh?: string; error?: string }>
@@ -524,12 +530,15 @@ export interface SilProjectData {
   lastSyncAt?: string
 }
 
-// 同步结果
+// 同步结果（成功时可能带最新版本信息，供项目管理展示）
 export interface SilSyncResult {
   success: boolean
   imported: number
   updated: number
   errors: string[]
+  latestVersion?: string
+  latestVersionSummary?: string
+  latestVersionDate?: string
 }
 
 // 本地项目 (用于管理器显示)
@@ -568,6 +577,10 @@ export interface LocalProject {
   addedAt?: string                // 加入列表的时间（ISO 字符串），用于排序：新导入的排最前
   githubUrl?: string
   status: 'active' | 'archived'
+  // 项目版本（从 git tags 同步，用于展示与「在 Cursor 打开」时 checkout）
+  latestVersion?: string
+  latestVersionSummary?: string
+  latestVersionDate?: string
 }
 
 // AI 分析结果 - GitHub 仓库

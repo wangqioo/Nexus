@@ -44,10 +44,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   gitPull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
   gitStatus: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
+  getVersionList: (projectPath: string) => ipcRenderer.invoke('project:getVersionList', projectPath),
+  gitCheckout: (projectPath: string, ref: string) => ipcRenderer.invoke('project:gitCheckout', projectPath, ref),
   
   // AI 分析
-  analyzeGitHubRepo: (url: string, apiKey: string) => 
+  analyzeGitHubRepo: (url: string, apiKey: string) =>
     ipcRenderer.invoke('ai:analyzeGitHubRepo', url, apiKey),
+  extractGitHubUrls: (text: string, apiKey: string) =>
+    ipcRenderer.invoke('ai:extractGitHubUrls', text, apiKey),
   analyzeLocalProject: (projectPath: string, apiKey: string) =>
     ipcRenderer.invoke('ai:analyzeLocalProject', projectPath, apiKey),
   generateProjectDocs: (projectPath: string, apiKey: string) =>

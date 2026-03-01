@@ -14,7 +14,10 @@
     "main": "dist-electron/main.js"
   },
   "extraResources": [
-    { "from": "public/icon.png", "to": "icon.png" }
+    {
+      "from": "public/icon.png",
+      "to": "icon.png"
+    }
   ],
   "mac": {
     "target": [
@@ -52,9 +55,9 @@
     "category": "Development"
   },
   "nsis": {
-    "oneClick": false,
+    "oneClick": true,
     "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
+    "allowToChangeInstallationDirectory": false,
     "deleteAppDataOnUninstall": false
   },
   "publish": null

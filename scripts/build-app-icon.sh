@@ -21,7 +21,8 @@ for size in 16 32 64 128 256 512; do
 done
 
 iconutil -c icns "$ICONSET" -o "$OUT/icon.icns"
-# 供其他用途的 512 圆角版
-node scripts/round-icon.js "$SRC" "$OUT/icon.png"
+# 供 Windows/其他用途：至少 256x256（electron-builder 要求）
+sips -z 256 256 "$SRC" --out "$OUT/icon.png"
+node scripts/round-icon.js "$OUT/icon.png" "$OUT/icon.png"
 rm -rf "$ICONSET"
 echo "Done: $OUT/icon.icns (rounded), $OUT/icon.png from $SRC"

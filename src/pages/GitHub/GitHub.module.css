@@ -41,6 +41,85 @@
   width: 160px;
 }
 
+/* 分类筛选（与项目管理页一致，可点击切换） */
+.typeSection {
+  margin-bottom: 20px;
+}
+
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
+
+.typeTabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.typeTab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  min-width: 100px;
+}
+
+.typeTab:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.typeTabActive {
+  color: var(--text-primary) !important;
+  font-weight: 500;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.typeTabActiveAll {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.typeIcon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.typeLabel {
+  flex: 1;
+  font-weight: 500;
+}
+
+.typeCount {
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--bg-hover);
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.typeTabActive .typeCount {
+  background: rgba(22, 119, 255, 0.2);
+}
+
 .stats {
   display: flex;
   gap: 8px;
@@ -60,6 +139,12 @@
   min-height: 400px;
 }
 
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
 .loading {
   display: flex;
   justify-content: center;
@@ -67,12 +152,15 @@
   height: 400px;
 }
 
-/* 仓库卡片 */
+/* 仓库卡片（与项目管理卡片对齐，等高） */
 .repoCard {
   background: var(--bg-secondary) !important;
   border: 1px solid var(--border-primary) !important;
   border-radius: 8px !important;
   transition: all 0.3s;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .repoCard:hover {
@@ -87,6 +175,10 @@
 
 .repoCard :global(.ant-card-body) {
   padding: 16px !important;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .repoCard :global(.ant-card-actions) {
@@ -116,12 +208,27 @@
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   flex: 1;
+  min-width: 0;
+  transition: color 0.3s;
+}
+
+.repoNameText {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-word;
+}
+
+.repoNameSummary {
+  font-weight: 500;
+  color: var(--text-tertiary);
   transition: color 0.3s;
 }
 
@@ -225,6 +332,7 @@
   justify-content: space-between;
   align-items: center;
   padding-top: 8px;
+  margin-top: auto;
   border-top: 1px solid var(--border-primary);
   transition: border-color 0.3s;
 }

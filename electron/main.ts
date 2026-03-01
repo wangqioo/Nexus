@@ -1044,12 +1044,13 @@ ipcMain.handle('project:analyze', async (_, projectPath: string) => {
   }
 })
 
-// 开发库默认配置路径（不写死用户名，便于开源）
+// 开发库独立目录（不与 Workshop 项目混放），按类型分子目录：DevLibs/mcu、DevLibs/software 等
+const DEVLIBS_DIR = 'DevLibs'
 ipcMain.handle('project:getDefaultReposConfigPath', async () => {
-  return path.join(os.homedir(), 'Workshop', 'MCU', '_github', 'repos.json')
+  return path.join(os.homedir(), DEVLIBS_DIR, 'repos.json')
 })
 ipcMain.handle('project:getDefaultReposBasePath', async () => {
-  return path.join(os.homedir(), 'Workshop', 'MCU', '_github')
+  return path.join(os.homedir(), DEVLIBS_DIR)
 })
 
 ipcMain.handle('project:readFile', async (_, filePath: string) => {
@@ -1503,6 +1504,46 @@ ipcMain.handle('shell:openInCursor', async (_, targetPath: string) => {
   }
 })
 
+const VERSION_LIST_SEP = '|||'
+
+async function getProjectVersionList(projectPath: string): Promise<{ version: string; summary: string; createdAt: string }[]> {
+  try {
+    if (!fs.existsSync(path.join(projectPath, '.git'))) {
+      return []
+    }
+    const fmt = `%(refname:short)${VERSION_LIST_SEP}%(creatordate:iso8601)${VERSION_LIST_SEP}%(subject)`
+    const { stdout } = await execAsync(
+      `git for-each-ref refs/tags --format='${fmt}' --sort=-creatordate`,
+      { cwd: projectPath, maxBuffer: 1024 * 1024 }
+    )
+    const lines = (stdout || '').trim().split('\n').filter(Boolean)
+    return lines.map(line => {
+      const parts = line.split(VERSION_LIST_SEP, 3)
+      const version = (parts[0] || '').trim()
+      const createdAt = (parts[1] || '').trim()
+      const summary = (parts[2] || '').split('\n')[0].trim() || version
+      return { version, summary, createdAt }
+    })
+  } catch {
+    return []
+  }
+}
+
+ipcMain.handle('project:getVersionList', async (_, projectPath: string) => getProjectVersionList(projectPath))
+
+/** 在项目目录执行 git checkout（用于「在 Cursor 打开」时切换到选中的版本） */
+ipcMain.handle('project:gitCheckout', async (_, projectPath: string, ref: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    if (!fs.existsSync(path.join(projectPath, '.git'))) {
+      return { success: false, error: '非 Git 仓库' }
+    }
+    await execAsync(`git checkout "${ref}"`, { cwd: projectPath })
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: (e?.message || String(e)) }
+  }
+})
+
 ipcMain.handle('shell:openExternal', async (_, url: string) => {
   try {
     await shell.openExternal(url)
@@ -1785,6 +1826,13 @@ ${(templates as any).other ? generateTemplateGuide((templates as any).other, 'ot
 ## 同步到知识库
 
 开发完成后，回到 Nexus 应用点击「一键导入」，将经验同步到全局知识库。
+
+## 版本管理
+
+- 使用 **git tag** 做发布版本（建议语义化版本如 \`v1.0.0\`），tag 的 **message** 作为该版本的简要更新说明；Nexus 会读取这些 tag，在项目管理面板展示版本号、简要概括与创建时间。
+- 在 Nexus 中可点击项目卡片的版本行选择某一版本；点击「在 Cursor 打开」时会先 \`git checkout\` 到所选版本再打开，用完后离开项目管理页或再次打开会自动恢复为「最新」。
+- 版本先后以 **tag/提交时间** 为准；若版本号相同，以系统记录的时间区分。
+- 在 Cursor 中完成重要更新后，可打 tag 并写清 message，便于在 Nexus 中查看与回看历史版本。
 
 ## 通用设置
 
@@ -2749,7 +2797,17 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
     }
     
     sendSyncProgress('同步完成', totalFiles, totalFiles)
-    return { success: true, imported, updated, errors }
+    const versionList = await getProjectVersionList(projectPath)
+    const latest = versionList[0] || null
+    return {
+      success: true,
+      imported,
+      updated,
+      errors,
+      latestVersion: latest?.version,
+      latestVersionSummary: latest?.summary,
+      latestVersionDate: latest?.createdAt,
+    }
   } catch (error: any) {
     sendSyncProgress('同步失败', 0, 0)
     return { success: false, imported: 0, updated: 0, errors: [error.message] }
@@ -2977,19 +3035,21 @@ ${readmeContent}
 {
   "name": "仓库显示名称（简短中文名，如 ESP-IDF、小智语音助手）",
   "description": "一句话中文描述这个仓库的用途（不超过30字）",
-  "category": "分类，只能是以下之一: espressif/sifli/lvgl/arduino/tools",
+  "category": "类型 id，只能是以下之一: mcu/ai/software/linux/mobile/remote/fpga",
   "tags": ["标签1", "标签2", "标签3", "标签4"],
   "branch": "默认分支，通常是 main 或 master",
   "starred": false,
   "summary": "基于 README 的详细介绍（2-4段中文，包含：项目功能、主要特性、支持的硬件/芯片、使用场景等，约200-400字）"
 }
 
-分类说明:
-- espressif: Espressif 官方或 ESP32 相关项目
-- sifli: SiFli 芯片相关项目
-- lvgl: LVGL GUI 或显示相关项目
-- arduino: Arduino 相关项目
-- tools: 其他工具、库、框架
+类型说明（category 必须为下列之一）:
+- mcu: 单片机、嵌入式、ESP32/STM32 等
+- ai: 人工智能、机器学习、大模型
+- software: 软件、Web、桌面应用、服务端
+- linux: Linux 内核、驱动、系统
+- mobile: 移动端 iOS/Android/跨平台
+- remote: 远程开发、云、运维
+- fpga: FPGA、硬件描述
 
 标签说明: 应包含芯片型号(如 ESP32、ESP32-S3)、功能关键词(如 音频、显示、AI、语音)、项目类型(如 SDK、框架、示例)等
 
@@ -3031,6 +3091,79 @@ summary 要求:
   } catch (error) {
     logger.error('AI 分析错误:', error)
     return null
+  }
+})
+
+/** 规范化为标准 GitHub URL 并加入集合 */
+function addGitHubUrl(seen: Set<string>, raw: string): void {
+  let url = raw.trim()
+  if (url.startsWith('git@')) {
+    url = 'https://github.com/' + url.replace(/^git@github\.com:/i, '').replace(/\.git$/i, '')
+  }
+  const ownerRepo = url.match(/github\.com[/:]([^/]+)\/([^/?#.\s]+)/)
+  if (ownerRepo) {
+    seen.add(`https://github.com/${ownerRepo[1]}/${ownerRepo[2]}`)
+  }
+}
+
+/** 从文本中提取 GitHub 仓库链接（支持纯 URL 与 Markdown 格式；用于批量导入） */
+function extractGitHubUrlsFromText(text: string): string[] {
+  const seen = new Set<string>()
+  const s = text || ''
+
+  // 1. Markdown 行内链接: [text](https://github.com/owner/repo) 或 [text](url "title")
+  const mdInline = /\[([^\]]*)\]\((https?:\/\/github\.com\/[^)\s]+(?:\s+"[^"]*")?)\)/gi
+  let m: RegExpExecArray | null
+  while ((m = mdInline.exec(s)) !== null) {
+    const url = m[2].split(/\s+/)[0].replace(/"$/, '')
+    addGitHubUrl(seen, url)
+  }
+
+  // 2. Markdown 参考链接: [ref]: https://github.com/owner/repo
+  const mdRef = /^\[[^\]]*\]:\s*(https?:\/\/github\.com\/[^\s]+)/gim
+  while ((m = mdRef.exec(s)) !== null) {
+    addGitHubUrl(seen, m[1])
+  }
+
+  // 3. 纯 URL: https://github.com/... 或 git@github.com:...
+  const plain = /https?:\/\/github\.com\/[^\s'"<>]+\/[^\s'"<>?#]+|git@github\.com:[^\s'"<>]+/gi
+  while ((m = plain.exec(s)) !== null) {
+    addGitHubUrl(seen, m[0])
+  }
+
+  return Array.from(seen)
+}
+
+ipcMain.handle('ai:extractGitHubUrls', async (_, text: string, apiKey: string) => {
+  const regexUrls = extractGitHubUrlsFromText(text || '')
+  if (regexUrls.length > 0) {
+    return { urls: regexUrls }
+  }
+  const opts = getAiRequestOptions(apiKey)
+  if (!opts) {
+    return { urls: [] }
+  }
+  const prompt = `从以下文字中提取所有 GitHub 仓库链接。只输出 URL，每行一个；不要解释、不要其他内容。若没有找到任何链接则只输出一行：NONE\n\n${(text || '').slice(0, 8000)}`
+  try {
+    const ret = await callAIWithRetry(opts, prompt, { maxRetries: 1, max_tokens: 1024 })
+    if (!ret.success || !ret.data) return { urls: [] }
+    const lines = ret.data.split(/\n/).map((l: string) => l.trim()).filter(Boolean)
+    const urls: string[] = []
+    const seen = new Set<string>()
+    for (const line of lines) {
+      if (/^https?:\/\/github\.com\/[^/]+\/[^\s]+/.test(line) || /^git@github\.com:[^/]+\/[^\s]+/.test(line)) {
+        let u = line.replace(/\.git$/i, '')
+        if (u.startsWith('git@')) u = 'https://github.com/' + u.replace(/^git@github\.com:/i, '').replace(/\.git$/i, '')
+        const key = u.toLowerCase()
+        if (!seen.has(key)) {
+          seen.add(key)
+          urls.push(u.startsWith('http') ? u : `https://github.com/${u}`)
+        }
+      }
+    }
+    return { urls }
+  } catch {
+    return { urls: [] }
   }
 })
 

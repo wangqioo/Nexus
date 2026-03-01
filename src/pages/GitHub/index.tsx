@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { 
   Typography, Input, Button, Card, Tag, Empty, Space, 
   message, Row, Col, Tooltip, Spin, Badge, Select, Modal, Form,
-  Switch, Popconfirm
+  Switch, Popconfirm, List
 } from 'antd'
 import { 
   SearchOutlined, GithubOutlined, DownloadOutlined, SyncOutlined,
@@ -10,9 +10,12 @@ import {
   CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined,
   ThunderboltOutlined, ClockCircleOutlined, LayoutOutlined,
   ExperimentOutlined, ToolOutlined, PlusOutlined, DeleteOutlined,
-  EditOutlined, InfoCircleOutlined
+  EditOutlined, InfoCircleOutlined, ImportOutlined
 } from '@ant-design/icons'
 import type { GitHubRepo, GitHubCategory, GitStatusResult } from '../../types'
+import { PROJECT_TYPES } from '../../types'
+import type { CustomProjectType, ProjectType } from '../../types'
+import { getProjectTypeIcon } from '../../components/Icons'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { logger } from '../../utils/logger'
 import styles from './GitHub.module.css'
@@ -20,13 +23,11 @@ import styles from './GitHub.module.css'
 const { Title, Text, Paragraph } = Typography
 const { TextArea } = Input
 
-// 图标映射
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  'espressif': <ThunderboltOutlined />,
-  'sifli': <ClockCircleOutlined />,
-  'lvgl': <LayoutOutlined />,
-  'arduino': <ExperimentOutlined />,
-  'tools': <ToolOutlined />,
+// 项目类型 id 列表（与软件内分类一致），用于校验 AI 返回的 category
+const PROJECT_TYPE_IDS = new Set(PROJECT_TYPES.map(t => t.id))
+
+function projectTypeToCategory(t: { id: string; name: string; icon: string; color: string }): GitHubCategory {
+  return { id: t.id, name: t.name, icon: t.icon, color: t.color }
 }
 
 export function GitHub() {
@@ -50,6 +51,22 @@ export function GitHub() {
   // AI 分析
   const [analyzing, setAnalyzing] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  
+  // 自定义项目类型（与项目管理一致，用于开发库类型分类）
+  const [customTypes, setCustomTypes] = useState<CustomProjectType[]>([])
+  
+  // 批量导入
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchText, setBatchText] = useState('')
+  const [batchUrls, setBatchUrls] = useState<string[]>([])
+  const [batchExtracting, setBatchExtracting] = useState(false)
+  const [batchAdding, setBatchAdding] = useState(false)
+  
+  // 默认分类 = 内置项目类型 + 自定义类型（与软件内分类一致，仓库按类型放入 DevLibs/类型/仓库名）
+  const defaultCategories = useMemo<GitHubCategory[]>(() => [
+    ...PROJECT_TYPES.map(projectTypeToCategory),
+    ...customTypes.map(ct => ({ id: ct.id, name: ct.name, icon: ct.icon || '📁', color: ct.color || '#666' }))
+  ], [customTypes])
   
   // 加载 API Key
   useEffect(() => {
@@ -86,6 +103,14 @@ export function GitHub() {
   }, [])
 
   useEffect(() => {
+    const load = async () => {
+      const list = await window.electronAPI?.getCustomProjectTypes?.() ?? []
+      setCustomTypes(list || [])
+    }
+    load()
+  }, [])
+
+  useEffect(() => {
     if (reposConfigPath) loadReposConfig()
   }, [reposConfigPath])
 
@@ -93,19 +118,36 @@ export function GitHub() {
     filterRepos()
   }, [repos, searchQuery, selectedCategory])
 
+  // 仅当当前无分类且默认分类已就绪时补全 UI（不写文件，避免覆盖已有 repos）
+  useEffect(() => {
+    if (categories.length === 0 && defaultCategories.length > 0 && repos.length > 0) {
+      setCategories(defaultCategories)
+    }
+  }, [categories.length, defaultCategories.length, repos.length])
+
   const loadReposConfig = async () => {
     if (!reposConfigPath) return
     setLoading(true)
     try {
       const content = await window.electronAPI.readProjectFile(reposConfigPath)
+      const loadedRepos: GitHubRepo[] = []
+      let loadedCategories: GitHubCategory[] = []
       if (content) {
         const config = JSON.parse(content)
-        setRepos(config.repos || [])
-        setCategories(config.categories || [])
-        
-        // 检查所有仓库状态
-        checkAllReposStatus(config.repos || [])
+        loadedRepos.push(...(config.repos || []))
+        loadedCategories = config.categories || []
       }
+      setRepos(loadedRepos)
+      // 无分类时用软件内项目类型作为默认分类（仅补全 categories，绝不覆盖已有 repos）
+      if (loadedCategories.length === 0 && defaultCategories.length > 0) {
+        loadedCategories = defaultCategories
+        setCategories(loadedCategories)
+        const contentToWrite = JSON.stringify({ repos: loadedRepos, categories: loadedCategories }, null, 2)
+        await window.electronAPI.writeProjectFile(reposConfigPath, contentToWrite)
+      } else {
+        setCategories(loadedCategories)
+      }
+      checkAllReposStatus(loadedRepos)
     } catch (error) {
       logger.error('Failed to load repos config:', error)
       message.error('加载仓库配置失败')
@@ -207,10 +249,10 @@ export function GitHub() {
     }
   }
 
-  const handleOpenInTerminal = async (repo: GitHubRepo) => {
-    const success = await window.electronAPI.openInTerminal(repo.localPath)
+  const handleOpenInCursor = async (repo: GitHubRepo) => {
+    const success = await window.electronAPI.openInCursor(repo.localPath)
     if (!success) {
-      message.warning('目录不存在，请先克隆仓库')
+      message.warning('目录不存在或未安装 Cursor，请先克隆仓库')
     }
   }
 
@@ -255,21 +297,22 @@ export function GitHub() {
     message.success({ content: `更新完成: ${success} 成功, ${failed} 失败`, key: 'pullAll' })
   }
 
-  // 保存配置到文件
-  const saveReposConfig = async (newRepos: GitHubRepo[]) => {
+  // 保存配置到文件（可选传入 categories，用于迁移）
+  const saveReposConfig = async (newRepos: GitHubRepo[], newCategories?: GitHubCategory[]) => {
     try {
-      const config = { repos: newRepos, categories }
+      const cats = newCategories ?? categories
+      const config = { repos: newRepos, categories: cats }
       const content = JSON.stringify(config, null, 2)
-      
-      // 直接写入原始配置文件路径
       const success = await window.electronAPI.writeProjectFile(reposConfigPath, content)
-      
       return success
     } catch (error) {
       logger.error('Failed to save repos config:', error)
       return false
     }
   }
+
+  // 从 URL 取仓库原名（用于卡片展示：原名 · 概要中文名）
+  const getRepoNameFromUrl = (repo: GitHubRepo) => parseGitHubUrl(repo.url)?.name || repo.id
 
   // 从 GitHub URL 解析仓库信息
   const parseGitHubUrl = (url: string) => {
@@ -289,12 +332,13 @@ export function GitHub() {
     return null
   }
 
-  // 打开添加仓库模态框
+  // 打开添加仓库模态框（默认类型为 mcu，本地路径将为 DevLibs/类型/仓库名）
   const handleAddRepo = () => {
     setEditingRepo(null)
     form.resetFields()
+    const defaultCat = categories.length > 0 ? categories[0].id : 'mcu'
     form.setFieldsValue({
-      category: 'tools',
+      category: defaultCat,
       branch: 'main',
       starred: false,
       tags: ''
@@ -319,15 +363,15 @@ export function GitHub() {
     setModalOpen(true)
   }
 
-  // 处理 URL 输入变化，自动填充信息
+  // 处理 URL 输入变化，自动填充信息（本地路径按类型分目录：DevLibs/类型/仓库名）
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const url = e.target.value
     const parsed = parseGitHubUrl(url)
-    
     if (parsed && !editingRepo && reposBasePath) {
+      const cat = form.getFieldValue('category') || 'mcu'
       form.setFieldsValue({
         name: parsed.name,
-        localPath: `${reposBasePath}/tools/${parsed.name}`
+        localPath: `${reposBasePath}/${cat}/${parsed.name}`
       })
     }
   }
@@ -355,21 +399,19 @@ export function GitHub() {
       const result = await window.electronAPI.analyzeGitHubRepo(url, apiKey)
       
       if (result) {
-        // 解析 URL 获取仓库名
         const parsed = parseGitHubUrl(url)
         const repoName = parsed?.name || result.name.toLowerCase().replace(/[^a-z0-9]/g, '-')
-        
-        // 自动填充表单（本地路径使用用户主目录下的默认开发库路径）
         const base = reposBasePath || (await window.electronAPI?.getDefaultReposBasePath?.()) || ''
+        const cat = PROJECT_TYPE_IDS.has(result.category as ProjectType) ? result.category : 'software'
         form.setFieldsValue({
           name: result.name,
           description: result.description,
           summary: result.summary || '',
-          category: result.category,
+          category: cat,
           branch: result.branch || 'main',
           tags: result.tags?.join(', ') || '',
           starred: result.starred || false,
-          localPath: base ? `${base}/${result.category}/${repoName}` : ''
+          localPath: base ? `${base}/${cat}/${repoName}` : ''
         })
         
         message.success({ content: '分析完成！已生成详细介绍', key: 'analyze' })
@@ -482,6 +524,98 @@ export function GitHub() {
     return category?.color || '#666'
   }
 
+  // 批量导入：AI 提取文本中的 GitHub 链接
+  const handleBatchExtractUrls = async () => {
+    if (!batchText.trim()) {
+      message.warning('请先粘贴包含 GitHub 链接的文字')
+      return
+    }
+    if (!apiKey) {
+      message.warning('请先在设置 → 大模型 API 中配置 API Key')
+      return
+    }
+    setBatchExtracting(true)
+    try {
+      const { urls } = await window.electronAPI.extractGitHubUrls(batchText, apiKey)
+      setBatchUrls(urls)
+      if (urls.length === 0) {
+        message.info('未识别到 GitHub 仓库链接')
+      } else {
+        message.success(`已提取 ${urls.length} 个链接`)
+      }
+    } catch (e) {
+      message.error('提取失败')
+    }
+    setBatchExtracting(false)
+  }
+
+  // 批量导入：逐个分析并添加仓库（按类型分目录）
+  const handleBatchAdd = async () => {
+    if (batchUrls.length === 0) {
+      message.warning('请先点击「AI 提取链接」')
+      return
+    }
+    if (!apiKey) {
+      message.warning('请先配置 API Key')
+      return
+    }
+    const base = reposBasePath || (await window.electronAPI?.getDefaultReposBasePath?.()) || ''
+    if (!base) {
+      message.error('无法获取开发库根路径')
+      return
+    }
+    setBatchAdding(true)
+    let added = 0
+    const existingUrls = new Set(repos.map(r => r.url.replace(/\.git$/i, '')))
+    let currentRepos = [...repos]
+    for (const url of batchUrls) {
+      const normalized = url.endsWith('.git') ? url : url + '.git'
+      const key = url.replace(/\.git$/i, '')
+      if (existingUrls.has(key)) continue
+      try {
+        const result = await window.electronAPI.analyzeGitHubRepo(url, apiKey)
+        const parsed = parseGitHubUrl(url)
+        const repoName = parsed?.name || (result?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '-') || 'repo'
+        const cat = result?.category && PROJECT_TYPE_IDS.has(result.category as ProjectType) ? result.category : 'software'
+        const newRepo: GitHubRepo = {
+          id: repoName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          name: result?.name || repoName,
+          description: result?.description || '',
+          url: normalized,
+          category: cat,
+          localPath: `${base}/${cat}/${repoName}`,
+          branch: result?.branch || 'main',
+          tags: result?.tags || [],
+          starred: result?.starred || false,
+          summary: result?.summary
+        }
+        if (currentRepos.some(r => r.id === newRepo.id)) {
+          newRepo.id = `${newRepo.id}-${Date.now().toString(36)}`
+        }
+        currentRepos = [...currentRepos, newRepo]
+        const saved = await saveReposConfig(currentRepos)
+        if (saved) {
+          setRepos(currentRepos)
+          existingUrls.add(key)
+          added++
+          const status = await window.electronAPI.gitStatus(newRepo.localPath)
+          setRepoStatus(prev => ({ ...prev, [newRepo.id]: status }))
+        }
+      } catch (_) {
+        // 单条失败继续下一条
+      }
+    }
+    setBatchAdding(false)
+    if (added > 0) {
+      setBatchModalOpen(false)
+      setBatchUrls([])
+      setBatchText('')
+      message.success(`已添加 ${added} 个仓库`)
+    } else {
+      message.info('没有新仓库被添加（可能均已存在）')
+    }
+  }
+
   if (loading) {
     return (
       <div className={styles.loading}>
@@ -504,14 +638,52 @@ export function GitHub() {
             <Button icon={<DownloadOutlined />} onClick={handlePullAll}>
               全部更新
             </Button>
+            <Button icon={<ImportOutlined />} onClick={() => { setBatchModalOpen(true); setBatchUrls([]); setBatchText('') }}>
+              批量导入
+            </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAddRepo}>
               添加仓库
             </Button>
           </Space>
         </div>
         <Paragraph type="secondary" className={styles.subtitle}>
-          {t.devLibrary.subtitle}
+          {t.devLibrary.subtitle} 仓库将克隆到 <code>~/DevLibs/类型/仓库名</code>，与 Workshop 项目分开存放。
         </Paragraph>
+
+        {/* 分类筛选（与项目管理页一致，点击切换类型） */}
+        <div className={styles.typeSection}>
+          <div className={styles.sectionLabel}>项目类型</div>
+          <div className={styles.typeTabs}>
+            <div
+              className={`${styles.typeTab} ${selectedCategory === 'all' ? `${styles.typeTabActive} ${styles.typeTabActiveAll}` : ''}`}
+              onClick={() => setSelectedCategory('all')}
+            >
+              <span className={styles.typeIcon}>📋</span>
+              <span className={styles.typeLabel}>全部</span>
+              <span className={styles.typeCount}>{repos.length}</span>
+            </div>
+            {categories.map(cat => {
+              const count = repos.filter(r => r.category === cat.id).length
+              return (
+                <div
+                  key={cat.id}
+                  className={`${styles.typeTab} ${selectedCategory === cat.id ? styles.typeTabActive : ''}`}
+                  style={selectedCategory === cat.id
+                    ? { background: cat.color, borderColor: cat.color, color: '#fff' }
+                    : { borderLeftColor: cat.color, borderLeftWidth: 3 }
+                  }
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  <span className={styles.typeIcon}>{getProjectTypeIcon(cat.id, cat.icon)}</span>
+                  <span className={styles.typeLabel}>{cat.name}</span>
+                  <span className={styles.typeCount}>{count}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 搜索栏 */}
         <div className={styles.filters}>
           <Input
             placeholder="搜索仓库..."
@@ -521,42 +693,6 @@ export function GitHub() {
             className={styles.searchInput}
             allowClear
           />
-          
-          <Select
-            value={selectedCategory}
-            onChange={setSelectedCategory}
-            className={styles.categorySelect}
-            options={[
-              { value: 'all', label: '全部分类' },
-              ...categories.map(c => ({
-                value: c.id,
-                label: (
-                  <Space>
-                    {CATEGORY_ICONS[c.id]}
-                    {c.name}
-                  </Space>
-                )
-              }))
-            ]}
-          />
-        </div>
-        
-        {/* 分类统计 */}
-        <div className={styles.stats}>
-          {categories.map(cat => {
-            const count = repos.filter(r => r.category === cat.id).length
-            const cloned = repos.filter(r => r.category === cat.id && repoStatus[r.id]?.isRepo).length
-            return (
-              <Tag 
-                key={cat.id} 
-                color={cat.color}
-                className={styles.statTag}
-                onClick={() => setSelectedCategory(cat.id)}
-              >
-                {CATEGORY_ICONS[cat.id]} {cat.name}: {cloned}/{count}
-              </Tag>
-            )
-          })}
         </div>
       </div>
 
@@ -564,15 +700,15 @@ export function GitHub() {
         {filteredRepos.length === 0 ? (
           <Empty description="没有找到匹配的仓库" />
         ) : (
-          <Row gutter={[16, 16]}>
+          <div className={styles.cardGrid}>
             {filteredRepos.map(repo => {
               const status = repoStatus[repo.id]
               const isCloned = status?.isRepo
               const isLoading = loadingRepos[repo.id]
               
               return (
-                <Col xs={24} sm={12} lg={8} xl={6} key={repo.id}>
-                  <Card
+                <Card
+                    key={repo.id}
                     className={`${styles.repoCard} ${isCloned ? styles.cloned : ''}`}
                     hoverable
                     actions={[
@@ -585,9 +721,9 @@ export function GitHub() {
                           style={{ opacity: isCloned ? 1 : 0.3 }}
                         />
                       </Tooltip>,
-                      <Tooltip title="在终端打开" key="terminal">
+                      <Tooltip title="在 Cursor 中打开" key="cursor">
                         <CodeOutlined 
-                          onClick={() => handleOpenInTerminal(repo)}
+                          onClick={() => handleOpenInCursor(repo)}
                           style={{ opacity: isCloned ? 1 : 0.3 }}
                         />
                       </Tooltip>,
@@ -618,7 +754,21 @@ export function GitHub() {
                         >
                           {repo.starred ? <StarFilled className={styles.star} /> : <StarOutlined className={styles.starEmpty} />}
                         </span>
-                        {repo.name}
+                        <span className={styles.repoNameText}>
+                          {(() => {
+                            const original = getRepoNameFromUrl(repo)
+                            const summary = repo.name
+                            if (original && summary && original !== summary) {
+                              return (
+                                <>
+                                  {original}
+                                  <span className={styles.repoNameSummary}> · {summary}</span>
+                                </>
+                              )
+                            }
+                            return original || summary || '仓库'
+                          })()}
+                        </span>
                       </div>
                       <Space size={4}>
                         <Tooltip title="编辑">
@@ -677,12 +827,60 @@ export function GitHub() {
                       )}
                     </div>
                   </Card>
-                </Col>
               )
             })}
-          </Row>
+          </div>
         )}
       </div>
+
+      {/* 批量导入：粘贴文字 → AI 提取链接 → 批量添加 */}
+      <Modal
+        title={<><ImportOutlined /> 批量导入</>}
+        open={batchModalOpen}
+        onCancel={() => setBatchModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setBatchModalOpen(false)}>取消</Button>,
+          <Button key="extract" onClick={handleBatchExtractUrls} loading={batchExtracting} icon={<ThunderboltOutlined />}>
+            AI 提取链接
+          </Button>,
+          <Button key="add" type="primary" onClick={handleBatchAdd} loading={batchAdding} disabled={batchUrls.length === 0}>
+            批量添加（{batchUrls.length}）
+          </Button>
+        ]}
+        width={640}
+      >
+        <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          粘贴包含 GitHub 链接的文字（支持 Markdown：如 [描述](https://github.com/owner/repo)、README、文档等），点击「AI 提取链接」识别仓库地址，再批量添加。仓库将按 AI 分析的类型放入 ~/DevLibs/类型/仓库名。
+        </Paragraph>
+        <TextArea
+          placeholder="支持 Markdown 链接格式，如 [项目名](https://github.com/owner/repo)..."
+          value={batchText}
+          onChange={e => setBatchText(e.target.value)}
+          rows={6}
+          style={{ marginBottom: 16 }}
+        />
+        {batchUrls.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <Text strong>已提取的链接（可删除不需要的）：</Text>
+            <List
+              size="small"
+              dataSource={batchUrls}
+              style={{ maxHeight: 200, overflow: 'auto', marginTop: 8 }}
+              renderItem={(url, index) => (
+                <List.Item
+                  actions={[
+                    <Button type="link" size="small" danger onClick={() => setBatchUrls(prev => prev.filter((_, i) => i !== index))}>
+                      删除
+                    </Button>
+                  ]}
+                >
+                  <Text code style={{ fontSize: 12 }} ellipsis>{url}</Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* 添加/编辑仓库模态框 */}
       <Modal
@@ -697,7 +895,13 @@ export function GitHub() {
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ category: 'tools', branch: 'main', starred: false }}
+          initialValues={{ category: 'mcu', branch: 'main', starred: false }}
+          onValuesChange={(_, all) => {
+            if (reposBasePath && all.name && all.category && !editingRepo) {
+              const name = (all.name as string).toLowerCase().replace(/[^a-z0-9]/g, '-') || 'repo'
+              form.setFieldsValue({ localPath: `${reposBasePath}/${all.category}/${name}` })
+            }
+          }}
         >
           {/* API Key 配置（仅在未配置时显示） */}
           {!editingRepo && !apiKey && (
@@ -763,7 +967,7 @@ export function GitHub() {
                     value: c.id,
                     label: (
                       <Space>
-                        {CATEGORY_ICONS[c.id]}
+                        {getProjectTypeIcon(c.id, c.icon)}
                         {c.name}
                       </Space>
                     )
@@ -799,9 +1003,9 @@ export function GitHub() {
                 name="localPath"
                 label="本地路径"
                 rules={[{ required: true, message: '请输入本地存储路径' }]}
-                extra="仓库将被克隆到此目录"
+                extra="仓库将按类型克隆到 ~/DevLibs/类型/仓库名"
               >
-                <Input placeholder="本地克隆路径，如 ~/Workshop/MCU/_github/tools/xxx" />
+                <Input placeholder="~/DevLibs/类型/仓库名" />
               </Form.Item>
             </Col>
             <Col span={8}>
