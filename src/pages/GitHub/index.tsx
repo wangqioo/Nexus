@@ -915,7 +915,7 @@ export function GitHub() {
                 size="small"
               />
               <Text type="secondary" className={styles.apiKeyTip}>
-                获取: <a href="#" onClick={(e) => { e.preventDefault(); window.electronAPI.openExternal('https://open.bigmodel.cn') }}>open.bigmodel.cn</a>
+                获取: <a href="#" onClick={(e) => { e.preventDefault(); window.electronAPI.openExternal('https://platform.minimaxi.com') }}>platform.minimaxi.com</a>
               </Text>
             </div>
           )}

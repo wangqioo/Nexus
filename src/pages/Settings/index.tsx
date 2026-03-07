@@ -252,7 +252,7 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState('debug')
   const [apiKey, setApiKey] = useState('')
   const [apiKeySaving, setApiKeySaving] = useState(false)
-  const [aiProvider, setAiProvider] = useState<'zhipu' | 'openai' | 'kimi' | 'minimax' | 'custom'>('zhipu')
+  const [aiProvider, setAiProvider] = useState<'zhipu' | 'openai' | 'kimi' | 'minimax' | 'custom'>('minimax')
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiApiKey, setAiApiKey] = useState('')
   const [aiModel, setAiModel] = useState('')
@@ -274,11 +274,11 @@ export function Settings() {
           setApiKey(String(cfg.zhipu_api_key))
           localStorage.setItem('zhipu_api_key', String(cfg.zhipu_api_key))
         }
-        const p = cfg.ai_provider as string
-        if (p === 'custom' || p === 'openai' || p === 'kimi' || p === 'minimax') {
-          setAiProvider(p as 'openai' | 'kimi' | 'minimax' | 'custom')
+        const p = (cfg.ai_provider as string)?.toLowerCase?.()
+        if (p === 'custom' || p === 'openai' || p === 'kimi' || p === 'minimax' || p === 'zhipu') {
+          setAiProvider(p as 'openai' | 'kimi' | 'minimax' | 'zhipu' | 'custom')
         } else {
-          setAiProvider('zhipu')
+          setAiProvider('minimax')
         }
         setAiBaseUrl(String(cfg.ai_base_url || ''))
         setAiApiKey(String(cfg.ai_api_key || ''))
@@ -423,7 +423,7 @@ export function Settings() {
         </Space>
       </div>
 
-      {/* 大模型 API：智谱（默认）或自定义接口 */}
+      {/* 大模型 API：默认 MiniMax，可选智谱/OpenAI/Kimi/自定义 */}
       <Card
         title={
           <Space>
@@ -435,7 +435,7 @@ export function Settings() {
         style={{ marginBottom: 20 }}
       >
         <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          用于项目 AI 分析、导入时分类与同步补全等。可选智谱（默认）或填写其他兼容 OpenAI 格式的大模型 API。
+          用于项目 AI 分析、导入时分类与同步补全等。默认 MiniMax，也可选智谱、OpenAI、Kimi 或自定义兼容 OpenAI 格式的 API。
         </Paragraph>
         <Form layout="vertical" style={{ maxWidth: 560 }}>
           <Form.Item label="提供商">
@@ -443,10 +443,10 @@ export function Settings() {
               value={aiProvider}
               onChange={(v: 'zhipu' | 'openai' | 'kimi' | 'minimax' | 'custom') => setAiProvider(v)}
               options={[
-                { value: 'zhipu', label: '智谱（默认）' },
+                { value: 'minimax', label: 'MiniMax（默认）' },
+                { value: 'zhipu', label: '智谱' },
                 { value: 'openai', label: 'OpenAI' },
                 { value: 'kimi', label: '月之暗面 Kimi' },
-                { value: 'minimax', label: 'MiniMax' },
                 { value: 'custom', label: '其他（自定义 API）' },
               ]}
               style={{ width: 240 }}

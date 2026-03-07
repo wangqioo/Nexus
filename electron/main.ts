@@ -387,7 +387,8 @@ function getAiRequestOptions(passedApiKey?: string): { url: string; apiKey: stri
       config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
     }
   } catch (_) {}
-  const provider = (config.ai_provider as string) || 'zhipu'
+  const providerRaw = (config.ai_provider as string) || 'minimax'
+  const provider = typeof providerRaw === 'string' ? providerRaw.toLowerCase().trim() : 'minimax'
 
   if (provider === 'custom') {
     const base = (config.ai_base_url as string)?.trim()
@@ -414,11 +415,14 @@ function getAiRequestOptions(passedApiKey?: string): { url: string; apiKey: stri
     return { url, apiKey: key.trim(), model }
   }
 
-  // 智谱
-  const key = (passedApiKey || config.zhipu_api_key) as string
-  if (!key?.trim()) return null
-  const preset = AI_PRESETS.zhipu
-  return { url: preset.url, apiKey: key.trim(), model: preset.model }
+  // 未识别的 provider 回退到 MiniMax（与默认一致）
+  const key = (config.ai_api_key as string)?.trim()
+  if (!key) return null
+  const preset = AI_PRESETS.minimax
+  let url = preset.url
+  const groupId = (config.ai_group_id as string)?.trim()
+  if (groupId) url += (url.includes('?') ? '&' : '?') + 'GroupId=' + encodeURIComponent(groupId)
+  return { url, apiKey: key, model: (config.ai_model as string)?.trim() || preset.model }
 }
 
 // 递增版本号
@@ -935,7 +939,7 @@ ipcMain.handle('fs:getDataDir', async () => {
   return DATA_DIR
 })
 
-/** 当前是否已配置可用 AI（智谱/OpenAI/Kimi/MiniMax/自定义），供前端判断是否允许调用 AI 功能 */
+/** 当前是否已配置可用 AI（MiniMax/智谱/OpenAI/Kimi/自定义），供前端判断是否允许调用 AI 功能 */
 ipcMain.handle('config:getAiConfigured', async () => {
   return getAiRequestOptions() != null
 })
@@ -2644,8 +2648,8 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
       if (fs.existsSync(configPath)) {
         try {
           const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-          const provider = (config.ai_provider as string) || 'zhipu'
-          actualApiKey = provider === 'zhipu' ? config.zhipu_api_key : (config.ai_api_key as string)
+          const p = ((config.ai_provider as string) || 'minimax').toLowerCase().trim()
+          actualApiKey = p === 'zhipu' ? config.zhipu_api_key : (config.ai_api_key as string)
         } catch {}
       }
     }
@@ -2989,7 +2993,7 @@ async function scanSilProject(projectPath: string): Promise<any> {
 }
 
 // ============================================================
-// AI 分析 IPC (智谱 API)
+// AI 分析 IPC（MiniMax/智谱/OpenAI/Kimi 等，由 config.ai_provider 决定）
 // ============================================================
 
 ipcMain.handle('ai:analyzeGitHubRepo', async (_, url: string, apiKey: string) => {
@@ -3075,7 +3079,7 @@ summary 要求:
 
     const opts = getAiRequestOptions(apiKey)
     if (!opts) {
-      logger.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
+      logger.error('未配置 AI API（请在设置 → 大模型 API 中填写 MiniMax 或其它提供商）')
       return null
     }
     
@@ -3376,7 +3380,7 @@ ${configTemplate.aiPrompt}
 
     const opts = getAiRequestOptions(apiKey)
     if (!opts) {
-      return { success: false, error: '未配置 AI API（请在设置中填写智谱或自定义大模型）' }
+      return { success: false, error: '未配置 AI API（请在设置 → 大模型 API 中填写 MiniMax 或其它提供商）' }
     }
     
     const retryResult = await callAIWithRetry(opts, prompt, { maxRetries: 2, max_tokens: 3000 })
@@ -3473,7 +3477,7 @@ ipcMain.handle('ai:createProjectFromIdea', async (_, apiKey: string, idea: strin
     }
     const opts = getAiRequestOptions(apiKey)
     if (!opts) {
-      return { success: false, error: '未配置 AI API（请在设置中填写智谱或自定义大模型）' }
+      return { success: false, error: '未配置 AI API（请在设置 → 大模型 API 中填写 MiniMax 或其它提供商）' }
     }
     const prompt = `用户有一个项目想法，请根据下面这一句话生成：
 1. nameEn：英文项目名，用于文件夹名，仅使用小写字母、数字、连字符，简短（例如 my-awesome-app、tiny-tool）。
@@ -3651,7 +3655,7 @@ ${mainCode ? `=== 主程序代码 ===\n${mainCode}` : ''}
 
     const opts = getAiRequestOptions(apiKey)
     if (!opts) {
-      logger.error('未配置 AI API（请在设置中填写智谱或自定义大模型）')
+      logger.error('未配置 AI API（请在设置 → 大模型 API 中填写 MiniMax 或其它提供商）')
       return null
     }
     

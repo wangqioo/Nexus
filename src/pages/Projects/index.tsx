@@ -2120,7 +2120,7 @@ export function Projects() {
                 <Space.Compact style={{ width: '100%' }}>
                   <Input placeholder="选择文件夹后显示路径" style={{ flex: 1 }} disabled />
                   <Button onClick={handleSelectFolder}>选择文件夹</Button>
-                  <Tooltip title="用智谱 AI 分析项目并自动添加">
+                  <Tooltip title="用 AI 分析项目并自动添加（MiniMax/智谱等，见设置）">
                     <Button
                       type="primary"
                       icon={<ThunderboltOutlined />}
@@ -2316,7 +2316,7 @@ export function Projects() {
                 size="small"
               />
               <Text type="secondary" style={{ fontSize: 12 }}>
-                <a href="#" onClick={(e) => { e.preventDefault(); window.electronAPI.openExternal('https://open.bigmodel.cn') }}>获取 API Key</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); window.electronAPI.openExternal('https://platform.minimaxi.com') }}>获取 API Key</a>
               </Text>
             </Space>
           </div>

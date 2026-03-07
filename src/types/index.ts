@@ -407,7 +407,7 @@ export interface ElectronAPI {
   updateTemplateConfig: (config: Partial<NexusTemplateConfig>) => Promise<boolean>
   resetTemplateConfig: () => Promise<NexusTemplateConfig>
   getDataDir: () => Promise<string>
-  /** 当前是否已配置 AI（智谱/OpenAI/Kimi/MiniMax/自定义），用于前端是否展示或允许 AI 功能 */
+  /** 当前是否已配置 AI（MiniMax/智谱/OpenAI/Kimi/自定义），用于前端是否展示或允许 AI 功能 */
   getAiConfigured: () => Promise<boolean>
   readMarkdown: (filePath: string) => Promise<MarkdownParseResult | null>
   // 项目导入

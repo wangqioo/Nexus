@@ -26,8 +26,8 @@ const STEPS = [
     icon: '🤖',
     title: 'AI 分析',
     subtitle: '自动分类、生成概括名与简介',
-    detail: '导入与同步可选用 AI 分析。在「设置」→「大模型 API」中可选择智谱或填写其他大模型接口（API 地址 + Key），用于自动识别项目类型、生成概括名与简介，以及同步时补全标题与标签。',
-    visualCaption: '设置中可配置智谱或自定义大模型 API',
+    detail: '导入与同步可选用 AI 分析。在「设置」→「大模型 API」中默认使用 MiniMax，也可选智谱、OpenAI、Kimi 或自定义接口，用于自动识别项目类型、生成概括名与简介，以及同步时补全标题与标签。',
+    visualCaption: '设置中可配置 MiniMax（默认）或其它大模型 API',
   },
   {
     icon: '💻',
