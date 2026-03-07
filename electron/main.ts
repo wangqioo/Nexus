@@ -402,7 +402,8 @@ function getAiRequestOptions(passedApiKey?: string): { url: string; apiKey: stri
 
   if (AI_PRESETS[provider]) {
     const preset = AI_PRESETS[provider]
-    const key = (passedApiKey || config.ai_api_key) as string
+    // 智谱：前端可能传 zhipu_api_key；OpenAI/Kimi/MiniMax：只用 config.ai_api_key，不信任前端传入（前端目前只读 zhipu_api_key）
+    const key = (provider === 'zhipu' ? (passedApiKey || config.zhipu_api_key) : config.ai_api_key) as string
     if (!key?.trim()) return null
     const model = (config.ai_model as string)?.trim() || preset.model
     let url = preset.url
@@ -932,6 +933,11 @@ ipcMain.handle('fs:exists', async (_, filePath: string) => {
 
 ipcMain.handle('fs:getDataDir', async () => {
   return DATA_DIR
+})
+
+/** 当前是否已配置可用 AI（智谱/OpenAI/Kimi/MiniMax/自定义），供前端判断是否允许调用 AI 功能 */
+ipcMain.handle('config:getAiConfigured', async () => {
+  return getAiRequestOptions() != null
 })
 
 // ============================================================
@@ -2631,14 +2637,15 @@ ipcMain.handle('sil:syncFrom', async (_, projectPath: string, apiKey?: string, p
     const templateConfig = loadTemplateConfig()
     logger.info(`[Sync] 项目路径: ${projectPath}, 类型: ${resolvedType}${fromProjectYaml ? ' (project.yaml)' : projectType ? ' (前端指定)' : ' (路径推断)'}（一份模板）`)
     
-    // 尝试从配置文件读取 API Key
+    // 尝试从配置文件读取 API Key（按当前 AI 提供商取对应 key，否则 MiniMax/OpenAI/Kimi 会因只读 zhipu 而跳过 AI）
     let actualApiKey = apiKey
     if (!actualApiKey) {
       const configPath = path.join(DATA_DIR, 'config.json')
       if (fs.existsSync(configPath)) {
         try {
           const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-          actualApiKey = config.zhipu_api_key
+          const provider = (config.ai_provider as string) || 'zhipu'
+          actualApiKey = provider === 'zhipu' ? config.zhipu_api_key : (config.ai_api_key as string)
         } catch {}
       }
     }

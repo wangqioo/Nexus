@@ -52,11 +52,13 @@ export function Dashboard() {
       if (raw) {
         try {
           const cfg = JSON.parse(raw)
-          setHasApiKey(!!(cfg.zhipu_api_key || ''))
-          return
+          if (cfg.zhipu_api_key) {
+            setHasApiKey(true)
+            return
+          }
         } catch (_) {}
       }
-      setHasApiKey(false)
+      window.electronAPI.getAiConfigured?.().then((configured: boolean) => setHasApiKey(!!configured)).catch(() => setHasApiKey(false))
     }).catch(() => setHasApiKey(false))
   }, [])
 

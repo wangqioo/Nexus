@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readMarkdown: (path: string) => ipcRenderer.invoke('fs:readMarkdown', path),
   exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
   getDataDir: () => ipcRenderer.invoke('fs:getDataDir'),
-  
+  getAiConfigured: () => ipcRenderer.invoke('config:getAiConfigured'),
+
   // 模板配置管理
   getTemplateConfig: () => ipcRenderer.invoke('template:get'),
   updateTemplateConfig: (config: any) => ipcRenderer.invoke('template:update', config),

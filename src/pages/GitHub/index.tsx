@@ -48,9 +48,10 @@ export function GitHub() {
   const [editingRepo, setEditingRepo] = useState<GitHubRepo | null>(null)
   const [form] = Form.useForm()
   
-  // AI 分析
+  // AI 分析（hasAiConfigured 表示设置中已配置任意可用 AI，含 MiniMax/OpenAI/Kimi）
   const [analyzing, setAnalyzing] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  const [hasAiConfigured, setHasAiConfigured] = useState(false)
   
   // 自定义项目类型（与项目管理一致，用于开发库类型分类）
   const [customTypes, setCustomTypes] = useState<CustomProjectType[]>([])
@@ -68,28 +69,29 @@ export function GitHub() {
     ...customTypes.map(ct => ({ id: ct.id, name: ct.name, icon: ct.icon || '📁', color: ct.color || '#666' }))
   ], [customTypes])
   
-  // 加载 API Key
+  // 加载 API Key 与「是否已配置任意 AI」
   useEffect(() => {
-    const loadApiKey = async () => {
-      // 优先从 localStorage 读取
+    const load = async () => {
       const localKey = localStorage.getItem('zhipu_api_key')
-      if (localKey) {
-        setApiKey(localKey)
-        return
-      }
-      // 否则从配置文件读取
-      try {
-        const configContent = await window.electronAPI.readFile('config.json')
-        if (configContent) {
-          const config = JSON.parse(configContent)
-          if (config.zhipu_api_key) {
-            setApiKey(config.zhipu_api_key)
-            localStorage.setItem('zhipu_api_key', config.zhipu_api_key)
+      if (localKey) setApiKey(localKey)
+      else {
+        try {
+          const configContent = await window.electronAPI.readFile('config.json')
+          if (configContent) {
+            const config = JSON.parse(configContent)
+            if (config.zhipu_api_key) {
+              setApiKey(config.zhipu_api_key)
+              localStorage.setItem('zhipu_api_key', config.zhipu_api_key)
+            }
           }
-        }
+        } catch {}
+      }
+      try {
+        const configured = await window.electronAPI.getAiConfigured()
+        setHasAiConfigured(!!configured)
       } catch {}
     }
-    loadApiKey()
+    load()
   }, [])
 
   useEffect(() => {
@@ -384,19 +386,18 @@ export function GitHub() {
       return
     }
     
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
     
-    // 保存 API Key
-    localStorage.setItem('zhipu_api_key', apiKey)
+    if (apiKey) localStorage.setItem('zhipu_api_key', apiKey)
     
     setAnalyzing(true)
     message.loading({ content: '正在分析仓库...', key: 'analyze', duration: 0 })
     
     try {
-      const result = await window.electronAPI.analyzeGitHubRepo(url, apiKey)
+      const result = await window.electronAPI.analyzeGitHubRepo(url, apiKey || '')
       
       if (result) {
         const parsed = parseGitHubUrl(url)
@@ -530,13 +531,13 @@ export function GitHub() {
       message.warning('请先粘贴包含 GitHub 链接的文字')
       return
     }
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
     setBatchExtracting(true)
     try {
-      const { urls } = await window.electronAPI.extractGitHubUrls(batchText, apiKey)
+      const { urls } = await window.electronAPI.extractGitHubUrls(batchText, apiKey || '')
       setBatchUrls(urls)
       if (urls.length === 0) {
         message.info('未识别到 GitHub 仓库链接')
@@ -555,7 +556,7 @@ export function GitHub() {
       message.warning('请先点击「AI 提取链接」')
       return
     }
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先配置 API Key')
       return
     }
@@ -573,7 +574,7 @@ export function GitHub() {
       const key = url.replace(/\.git$/i, '')
       if (existingUrls.has(key)) continue
       try {
-        const result = await window.electronAPI.analyzeGitHubRepo(url, apiKey)
+        const result = await window.electronAPI.analyzeGitHubRepo(url, apiKey || '')
         const parsed = parseGitHubUrl(url)
         const repoName = parsed?.name || (result?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '-') || 'repo'
         const cat = result?.category && PROJECT_TYPE_IDS.has(result.category as ProjectType) ? result.category : 'software'
@@ -904,7 +905,7 @@ export function GitHub() {
           }}
         >
           {/* API Key 配置（仅在未配置时显示） */}
-          {!editingRepo && !apiKey && (
+          {!editingRepo && !apiKey && !hasAiConfigured && (
             <div className={styles.apiKeySection}>
               <Input.Password
                 placeholder="API Key（用于自动分析，可在设置 → 大模型 API 配置）"

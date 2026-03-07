@@ -108,9 +108,10 @@ export function Projects() {
   const [batchNewProjects, setBatchNewProjects] = useState<Array<{ path: string; name: string; hasNexus: boolean; hasReadme: boolean }>>([])
   const [batchScanning, setBatchScanning] = useState(false)
   
-  // AI 分析状态
+  // AI 分析状态（apiKey 为智谱/本地缓存；hasAiConfigured 表示设置中已配置任意可用 AI，含 MiniMax/OpenAI/Kimi）
   const [analyzing, setAnalyzing] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  const [hasAiConfigured, setHasAiConfigured] = useState(false)
   const [countdown, setCountdown] = useState(0)
   // 新建项目（从一句话生成）loading
   const [newProjectCreating, setNewProjectCreating] = useState(false)
@@ -153,26 +154,29 @@ export function Projects() {
   // 使用全局同步状态
   const { syncing, syncProgress, startSync, updateProgress, endSync } = useSync()
   
-  // 加载 API Key
+  // 加载 API Key 与「是否已配置任意 AI」
   useEffect(() => {
-    const loadApiKey = async () => {
+    const load = async () => {
       const localKey = localStorage.getItem('zhipu_api_key')
-      if (localKey) {
-        setApiKey(localKey)
-        return
+      if (localKey) setApiKey(localKey)
+      else {
+        try {
+          const configContent = await window.electronAPI.readFile('config.json')
+          if (configContent) {
+            const config = JSON.parse(configContent)
+            if (config.zhipu_api_key) {
+              setApiKey(config.zhipu_api_key)
+              localStorage.setItem('zhipu_api_key', config.zhipu_api_key)
+            }
+          }
+        } catch {}
       }
       try {
-        const configContent = await window.electronAPI.readFile('config.json')
-        if (configContent) {
-          const config = JSON.parse(configContent)
-          if (config.zhipu_api_key) {
-            setApiKey(config.zhipu_api_key)
-            localStorage.setItem('zhipu_api_key', config.zhipu_api_key)
-          }
-        }
+        const configured = await window.electronAPI.getAiConfigured()
+        setHasAiConfigured(!!configured)
       } catch {}
     }
-    loadApiKey()
+    load()
   }, [])
 
   useEffect(() => {
@@ -448,7 +452,7 @@ export function Projects() {
       return
     }
     
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
@@ -457,7 +461,7 @@ export function Projects() {
     message.loading({ content: '正在分析项目...', key: 'analyze', duration: 0 })
     
     try {
-      const result = await window.electronAPI.analyzeLocalProject(projectPath, apiKey)
+      const result = await window.electronAPI.analyzeLocalProject(projectPath, apiKey || '')
       
       if (result) {
         const analysisResult = result
@@ -754,11 +758,12 @@ export function Projects() {
       setCloneProgress(100)
       setCloneStatus('analyzing')
       
-      // AI 分析项目
+      // AI 分析项目（主进程会按设置中的 AI 提供商取 key，此处传参仅智谱时用到）
       let analysisResult = null
       let projectType: ProjectType = 'mcu'
-      if (apiKey) {
-        analysisResult = await window.electronAPI.analyzeLocalProject(tempPath, apiKey)
+      const canUseAi = apiKey || (await window.electronAPI.getAiConfigured())
+      if (canUseAi) {
+        analysisResult = await window.electronAPI.analyzeLocalProject(tempPath, apiKey || '')
         if (analysisResult?.projectType) {
           const allTypeIds: string[] = [...PROJECT_TYPES.map(t => t.id), ...customTypes.map(t => t.id)]
           const isUnclassified = !allTypeIds.includes(String(analysisResult.projectType))
@@ -855,21 +860,13 @@ export function Projects() {
         message.warning('请填写一句话描述')
         return
       }
-      let key = apiKey || localStorage.getItem('zhipu_api_key') || ''
-      if (!key) {
-        try {
-          const cfg = await window.electronAPI.readFile('config.json')
-          if (cfg) {
-            const config = JSON.parse(cfg)
-            key = config.zhipu_api_key || ''
-          }
-        } catch (_) {}
-      }
-      if (!key) {
+      const hasAi = apiKey || localStorage.getItem('zhipu_api_key') || (await window.electronAPI.getAiConfigured())
+      if (!hasAi) {
         message.warning('请先在导入弹窗下方或设置 → 大模型 API 中配置 API Key')
         return
       }
       setNewProjectCreating(true)
+      const key = apiKey || localStorage.getItem('zhipu_api_key') || ''
       const result = await window.electronAPI.createProjectFromIdea(key, idea, projectType)
       if (!result.success || !result.path) {
         message.error(result.error || '创建失败')
@@ -984,12 +981,13 @@ export function Projects() {
     // 打开模态框
     setInitModalOpen(true)
     
-    // 后台调用 AI 分析
-    const apiKey = localStorage.getItem('zhipu_api_key')
-    if (apiKey) {
+    // 后台调用 AI 分析（主进程会按设置中的 AI 提供商取 key）
+    const canUseAi = localStorage.getItem('zhipu_api_key') || (await window.electronAPI.getAiConfigured())
+    if (canUseAi) {
       message.loading({ content: 'AI 正在分析项目...', key: 'init-ai' })
       try {
-        const analysis = await window.electronAPI.analyzeLocalProject(project.path, apiKey)
+        const key = localStorage.getItem('zhipu_api_key') || ''
+        const analysis = await window.electronAPI.analyzeLocalProject(project.path, key)
         if (analysis) {
           // 用 AI 结果更新表单
           initForm.setFieldsValue({
@@ -1176,14 +1174,14 @@ export function Projects() {
   // 为当前项目 AI 生成介绍（无 summary 时使用）
   const handleGenerateSummary = async () => {
     if (!selectedProject) return
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先在导入弹窗或设置 → 大模型 API 中配置 API Key')
       return
     }
     setGeneratingSummaryForId(selectedProject.id)
     message.loading({ content: '正在生成项目介绍...', key: 'gen-summary', duration: 0 })
     try {
-      const result = await window.electronAPI.analyzeLocalProject(selectedProject.path, apiKey)
+      const result = await window.electronAPI.analyzeLocalProject(selectedProject.path, apiKey || '')
       if (result?.summary) {
         const updatedProjects = projects.map(p =>
           p.id === selectedProject.id
@@ -1213,14 +1211,14 @@ export function Projects() {
   // 导入成功后：对分类不满意时再次分析并更新
   const handleReAnalyzeImported = async () => {
     if (!importedProject) return
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先在导入弹窗或设置 → 大模型 API 中配置 API Key')
       return
     }
     setReAnalyzingImport(true)
     message.loading({ content: '正在重新分析项目分类...', key: 'reanalyze', duration: 0 })
     try {
-      const result = await window.electronAPI.analyzeLocalProject(importedProject.path, apiKey)
+      const result = await window.electronAPI.analyzeLocalProject(importedProject.path, apiKey || '')
       if (!result) {
         message.warning({ content: '分析未返回结果', key: 'reanalyze' })
         setReAnalyzingImport(false)
@@ -1323,7 +1321,7 @@ export function Projects() {
     
     try {
       // 传入 API Key 和项目类型以启用 AI 分析
-      const result = await window.electronAPI.syncFromProject(project.path, apiKey || undefined, project.projectType)
+      const result = await window.electronAPI.syncFromProject(project.path, apiKey || (hasAiConfigured ? '' : undefined), project.projectType)
       
       // 更新进度为完成
       updateProgress({ step: '同步完成', current: 1, total: 1 })
@@ -1500,7 +1498,7 @@ export function Projects() {
       return
     }
     
-    if (!apiKey) {
+    if (!apiKey && !hasAiConfigured) {
       message.warning('请先在设置 → 大模型 API 中配置 API Key')
       return
     }
@@ -1534,7 +1532,7 @@ export function Projects() {
       try {
         // 1. AI 分析
         updateProgress({ step: `AI 分析项目信息...`, current: i, total: batchNewProjects.length, file: proj.name })
-        const analysis = await window.electronAPI.analyzeLocalProject(proj.path, apiKey)
+        const analysis = await window.electronAPI.analyzeLocalProject(proj.path, apiKey || '')
         
         let projectType: string
         if (analysis?.projectType && allTypeIds.includes(String(analysis.projectType))) {
@@ -1594,7 +1592,7 @@ export function Projects() {
         const docCount = silData?.documents?.length || 0
         if (docCount === 0) {
           updateProgress({ step: `AI 生成知识库文档...`, current: i, total: batchNewProjects.length, file: proj.name })
-          const genResult = await window.electronAPI.generateProjectDocs(finalPath, apiKey)
+          const genResult = await window.electronAPI.generateProjectDocs(finalPath, apiKey || '')
           if (genResult.success && genResult.generated) {
             newProject.documentCount = genResult.generated.notes + genResult.generated.snippets + genResult.generated.configs
           }
@@ -1606,7 +1604,7 @@ export function Projects() {
         if (newProject.documentCount > 0) {
           updateProgress({ step: `同步到知识库...`, current: i, total: batchNewProjects.length, file: proj.name })
           try {
-            const syncRes = await window.electronAPI.syncFromProject(finalPath, apiKey, newProject.projectType)
+            const syncRes = await window.electronAPI.syncFromProject(finalPath, apiKey || '', newProject.projectType)
             if (syncRes?.success && syncRes.latestVersion != null) {
               newProject.latestVersion = syncRes.latestVersion
               newProject.latestVersionSummary = syncRes.latestVersionSummary
@@ -2304,7 +2302,7 @@ export function Projects() {
         )}
 
         {/* API Key 区域（所有模式共用） */}
-        {!apiKey && (
+        {!apiKey && !hasAiConfigured && (
           <div className={styles.modalInfoBox}>
             <Space>
               <Input.Password
