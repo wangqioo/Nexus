@@ -370,11 +370,12 @@ function loadTemplateConfig(): typeof DEFAULT_TEMPLATE_CONFIG {
   return { ...DEFAULT_TEMPLATE_CONFIG }
 }
 
+// MiniMax：国内 Coding Plan 用 minimaxi.com + MiniMax-M2.5；国际可用 api.minimax.io（自定义 base_url）
 const AI_PRESETS: Record<string, { url: string; model: string }> = {
   zhipu: { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash' },
   openai: { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
   kimi: { url: 'https://api.moonshot.ai/v1/chat/completions', model: 'moonshot-v1-8k' },
-  minimax: { url: 'https://api.minimax.io/v1/text/chatcompletion_v2', model: 'abab6.5s-chat' },
+  minimax: { url: 'https://api.minimaxi.com/v1/text/chatcompletion_v2', model: 'MiniMax-M2.5' },
 }
 
 /** 从 config.json 读取 AI 配置，返回请求 URL、API Key、模型。支持智谱/OpenAI/Kimi/MiniMax 预设与自定义。 */
@@ -404,7 +405,12 @@ function getAiRequestOptions(passedApiKey?: string): { url: string; apiKey: stri
     const key = (passedApiKey || config.ai_api_key) as string
     if (!key?.trim()) return null
     const model = (config.ai_model as string)?.trim() || preset.model
-    return { url: preset.url, apiKey: key.trim(), model }
+    let url = preset.url
+    if (provider === 'minimax') {
+      const groupId = (config.ai_group_id as string)?.trim()
+      if (groupId) url += (url.includes('?') ? '&' : '?') + 'GroupId=' + encodeURIComponent(groupId)
+    }
+    return { url, apiKey: key.trim(), model }
   }
 
   // 智谱

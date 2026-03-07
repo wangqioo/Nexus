@@ -256,6 +256,7 @@ export function Settings() {
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiApiKey, setAiApiKey] = useState('')
   const [aiModel, setAiModel] = useState('')
+  const [aiGroupId, setAiGroupId] = useState('')
 
   useEffect(() => {
     loadConfig()
@@ -282,6 +283,7 @@ export function Settings() {
         setAiBaseUrl(String(cfg.ai_base_url || ''))
         setAiApiKey(String(cfg.ai_api_key || ''))
         setAiModel(String(cfg.ai_model || ''))
+        setAiGroupId(String(cfg.ai_group_id || ''))
       } catch (_) {}
     })
   }, [])
@@ -358,6 +360,11 @@ export function Settings() {
           delete existing.ai_base_url
           existing.ai_api_key = aiApiKey.trim() || undefined
           existing.ai_model = aiModel.trim() || undefined
+          if (aiProvider === 'minimax') {
+            existing.ai_group_id = aiGroupId.trim() || undefined
+          } else {
+            delete existing.ai_group_id
+          }
         } else {
           delete existing.ai_base_url
           delete existing.ai_api_key
@@ -480,6 +487,18 @@ export function Settings() {
                   <Button type="primary" onClick={handleSaveAi} loading={apiKeySaving}>保存</Button>
                 </Space.Compact>
               </Form.Item>
+              {aiProvider === 'minimax' && (
+                <Form.Item
+                  label="Group ID（可选）"
+                  extra="部分密钥需在 MiniMax 控制台「账户信息-基本信息」查看并填写，鉴权失败时可尝试"
+                >
+                  <Input
+                    placeholder="不填则仅用 API Key 鉴权"
+                    value={aiGroupId}
+                    onChange={e => setAiGroupId(e.target.value)}
+                  />
+                </Form.Item>
+              )}
               <Form.Item
                 label="模型名（可选）"
                 extra={
@@ -487,7 +506,7 @@ export function Settings() {
                     ? '默认 gpt-4o-mini，可改为 gpt-4 等'
                     : aiProvider === 'kimi'
                       ? '默认 moonshot-v1-8k，可改为 moonshot-v1-32k、kimi-k2-turbo 等'
-                      : '默认 abab6.5s-chat'
+                      : '默认 MiniMax-M2.5，Coding Plan 推荐此模型'
                 }
               >
                 <Input
@@ -496,7 +515,7 @@ export function Settings() {
                       ? 'gpt-4o-mini'
                       : aiProvider === 'kimi'
                         ? 'moonshot-v1-8k'
-                        : 'abab6.5s-chat'
+                        : 'MiniMax-M2.5'
                   }
                   value={aiModel}
                   onChange={e => setAiModel(e.target.value)}
