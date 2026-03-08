@@ -208,12 +208,24 @@ export function Notes() {
     }
   }
 
-  // 删除
+  // 删除：中央笔记库 + 项目内 .nexus/notes 对应源文件
   const handleDelete = async (note: Note) => {
-    await storage.deleteNote(note.id)
-    message.success('已删除')
-    setDrawerOpen(false)
-    loadData()
+    try {
+      const success = await storage.deleteNote(note.id)
+      if (!success) {
+        message.error('删除失败')
+        return
+      }
+      const projectPath = note.projectPath || note.sourceProject
+      if (projectPath && typeof window.electronAPI?.deleteProjectDoc === 'function') {
+        await window.electronAPI.deleteProjectDoc(projectPath, 'note', note.id)
+      }
+      message.success('已删除（含项目内源文件）')
+      setDrawerOpen(false)
+      loadData()
+    } catch (e: any) {
+      message.error(e?.message || '删除失败')
+    }
   }
 
   // 查看详情

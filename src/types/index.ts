@@ -468,6 +468,8 @@ export interface ElectronAPI {
   syncToProject: (projectPath: string, data: Partial<SilProjectData>) => Promise<boolean>
   checkPendingSync: (projectPath: string, projectType?: string) => Promise<PendingSyncResult>
   checkRemovedDocs: (projectPath: string, payload: { knowledge: Array<{ id: string; category: string; projectType: string }>; notes: string[] }) => Promise<{ removedKnowledgeIds: string[]; removedNoteIds: string[] }>
+  /** 删除项目中对应的经验/笔记源文件（.nexus 内 .md），与中央删除配合使用 */
+  deleteProjectDoc: (projectPath: string, type: 'knowledge' | 'note', id: string, category?: string) => Promise<{ success: boolean; deleted?: boolean; error?: string }>
   reverseSyncToProjects: () => Promise<{ success: boolean; synced: number; skipped: number; errors: string[] }>
   clearKnowledgeBase: () => Promise<{ success: boolean; deleted: number; error?: string }>
   /** 清空中央笔记/知识库并删除所有项目内的 .nexus */

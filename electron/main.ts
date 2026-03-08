@@ -2224,6 +2224,45 @@ ipcMain.handle('sil:checkRemovedDocs', async (
   return { removedKnowledgeIds, removedNoteIds }
 })
 
+/** 删除项目中对应的一条经验/笔记源文件（.nexus/silDir/xxx.md 或 .nexus/notes/xxx.md），与中央知识库/笔记删除配合使用 */
+ipcMain.handle('sil:deleteProjectDoc', async (
+  _,
+  projectPath: string,
+  type: 'knowledge' | 'note',
+  id: string,
+  category?: string
+) => {
+  const silPath = path.join(projectPath, SIL_DIR)
+  if (!fs.existsSync(silPath)) {
+    return { success: true, deleted: false }
+  }
+  const projectName = path.basename(projectPath)
+  const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const prefix = safeProjectName + '-'
+  let sourcePath: string
+  if (type === 'note') {
+    const base = id.startsWith(prefix) ? id.slice(prefix.length) : id
+    sourcePath = path.join(silPath, 'notes', base.endsWith('.md') ? base : base + '.md')
+  } else {
+    const catToSilDir: Record<string, string> = { debug: 'debug', snippet: 'snippets', config: 'configs', other: 'other' }
+    const silDir = catToSilDir[category || 'other'] || 'other'
+    const rest = id.startsWith(prefix) ? id.slice(prefix.length) : id
+    const baseName = rest.startsWith(silDir + '-') ? rest.slice(silDir.length + 1) : rest
+    const sourceMd = baseName.endsWith('.md') ? baseName : baseName + '.md'
+    sourcePath = path.join(silPath, silDir, sourceMd)
+  }
+  try {
+    if (fs.existsSync(sourcePath)) {
+      fs.unlinkSync(sourcePath)
+      return { success: true, deleted: true }
+    }
+    return { success: true, deleted: false }
+  } catch (e: any) {
+    logger.error('sil:deleteProjectDoc failed:', e)
+    return { success: false, deleted: false, error: e.message }
+  }
+})
+
 // 发送同步进度到渲染进程
 function sendSyncProgress(step: string, current: number, total: number, file?: string) {
   const win = BrowserWindow.getAllWindows()[0]

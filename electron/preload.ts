@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('sil:checkPending', projectPath, projectType),
   checkRemovedDocs: (projectPath: string, payload: { knowledge: Array<{ id: string; category: string; projectType: string }>; notes: string[] }) =>
     ipcRenderer.invoke('sil:checkRemovedDocs', projectPath, payload),
+  deleteProjectDoc: (projectPath: string, type: 'knowledge' | 'note', id: string, category?: string) =>
+    ipcRenderer.invoke('sil:deleteProjectDoc', projectPath, type, id, category),
   reverseSyncToProjects: () =>
     ipcRenderer.invoke('sil:reverseSync'),
   clearKnowledgeBase: () =>

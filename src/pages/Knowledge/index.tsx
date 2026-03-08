@@ -237,15 +237,23 @@ export function Knowledge() {
     }
   }
 
-  // 删除
+  // 删除：中央知识库 + 项目内 .nexus 对应源文件
   const handleDelete = async (entry: KnowledgeEntry) => {
-    const success = await storage.deleteKnowledgeEntry(entry)
-    if (success) {
-      message.success('已删除')
+    try {
+      const success = await storage.deleteKnowledgeEntry(entry)
+      if (!success) {
+        message.error('删除失败')
+        return
+      }
+      const projectPath = entry.projectPath || entry.sourceProject || entry.metadata?.sourceProject
+      if (projectPath && typeof window.electronAPI?.deleteProjectDoc === 'function') {
+        await window.electronAPI.deleteProjectDoc(projectPath, 'knowledge', entry.id, entry.category)
+      }
+      message.success('已删除（含项目内源文件）')
       setDrawerOpen(false)
       loadData()
-    } else {
-      message.error('删除失败')
+    } catch (e: any) {
+      message.error(e?.message || '删除失败')
     }
   }
 
